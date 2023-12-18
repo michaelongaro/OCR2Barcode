@@ -3,11 +3,23 @@
 import { ref, nextTick } from "vue";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/composables/useTheme";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import Tesseract from "tesseract.js";
+import JsBarcode from "jsbarcode";
+// import Patterns from "@/components/Patterns.vue";
 
 const { theme, toggleTheme } = useTheme();
 
 const showingCamera = ref(false);
+const showBarcodeDialog = ref(false);
+const canvasContainer = ref(null as HTMLDivElement | null);
+const canvasElements = ref([] as HTMLCanvasElement[]);
 const imageBase64 = ref("");
 
 function initializeCamera() {
@@ -27,6 +39,13 @@ function initializeCamera() {
   });
 }
 
+function scanMoreBarcodes() {
+  showBarcodeDialog.value = false;
+  canvasElements.value = [];
+  canvasContainer.value?.remove();
+  canvasContainer.value = null;
+}
+
 function takePicture() {
   // get image from canvas
   const player = document.getElementById("player");
@@ -38,7 +57,7 @@ function takePicture() {
 
     if (ctx && player) {
       const sx = player.videoWidth * 0.125; // Start at 12.5% of the video width (to center the 75% width crop)
-      const sy = player.videoHeight * 0.25; // Start at 25% of the video height (to center the 50% height crop)
+      const sy = player.videoHeight * 0.25; // Start at 25% of the video height (to center the 25% height crop)
       const sWidth = player.videoWidth * 0.75; // 75% of the video width
       const sHeight = player.videoHeight * 0.5; // 50% of the video height
 
@@ -48,19 +67,75 @@ function takePicture() {
 
       ctx.drawImage(player, sx, sy, sWidth, sHeight, 0, 0, sWidth, sHeight);
       const dataURI = canvas.toDataURL("image/jpeg");
-      // console.log(dataURI);
       imageBase64.value = dataURI;
 
       // stop video stream to save on resources
-      player.srcObject?.getVideoTracks().forEach((track) => track.stop());
+      // player.srcObject?.getVideoTracks().forEach((track) => track.stop());
 
-      Tesseract.recognize(dataURI, "eng", {
-        logger: (m) => console.log(m),
-      }).then(({ data: { text } }) => {
-        console.log(text);
+      Tesseract.recognize(dataURI, "eng").then(async ({ data: { text } }) => {
+        const matches = parseThroughExtractedText(text);
+
+        showBarcodeDialog.value = true;
+
+        await nextTick();
+
+        matches.forEach((_) => {
+          const canvas = document.createElement("canvas");
+          canvas.width = 250;
+          canvas.height = 100;
+          canvasElements.value.push(canvas);
+
+          console.log(canvasContainer.value);
+
+          canvasContainer.value?.appendChild(canvas);
+          console.log("appended");
+        });
+
+        await nextTick();
+
+        matches.forEach((match, index) => {
+          generateBarcode(canvasElements.value[index], match);
+        });
       });
     }
   }
+}
+
+function isBackroomLocation(s: string) {
+  return s.length === 9 && /^\d{2}[A-Z]\d{3}[A-Z]\d{2}$/.test(s);
+}
+
+function isDPCI(s: string) {
+  return s.length === 9 && /^\d{9}$/.test(s);
+}
+
+function parseThroughExtractedText(text: string) {
+  const minifiedText = text.replace(/\s/g, "").toUpperCase();
+  const matches = [];
+
+  for (let i = 0; i <= minifiedText.length - 9; i++) {
+    const substring = minifiedText.substring(i, i + 9);
+
+    if (isBackroomLocation(substring) || isDPCI(substring)) {
+      matches.push(substring);
+    }
+  }
+
+  return matches;
+}
+
+function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
+  console.log(barcodeText);
+  JsBarcode(canvas, barcodeText, {
+    format: "code39",
+    displayValue: true,
+    fontSize: 18,
+    margin: 7,
+    height: 75,
+    width: 1.5,
+  });
+  // const dataURI = canvas.toDataURL("image/jpeg");
+  // imageBase64.value = dataURI;
 }
 </script>
 
@@ -75,18 +150,25 @@ function takePicture() {
     </div>
 
     <!-- <HelloWorld msg="Welcome to Your Vue.js + TypeScript App" /> -->
-    <div class="h-1/2 w-full relative">
+    <div class="h-full w-full relative">
       <div v-if="showingCamera" class="h-full w-full">
-        <video id="player" autoplay></video>
+        <video id="player" autoplay class="w-full h-full z-[1]"></video>
 
         <div class="absolute w-full h-full baseFlex top-0 left-0">
-          <div class="border-red-700 border-2 rounded-lg w-3/4 h-1/2"></div>
+          <div class="border-red-700 border-2 rounded-lg w-3/4 h-1/4 z-[2]">
+            <!-- <div
+              class="absolute w-full h-full z-[2] pointer-events-none brightness-150"
+            ></div> -->
+          </div>
+          <div
+            class="absolute top-0 left-0 w-full h-full bg-gradient-to-center from-transparent via-transparent to-[rgba(0,0,0,0.5)] z-[3]"
+          ></div>
         </div>
 
-        <div class="absolute bottom-4 left-1/2 -translate-x-1/2">
+        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 !z-50">
           <Button
             @click="takePicture"
-            class="bg-slate-800 text-white p-4 rounded-full"
+            class="bg-slate-800 text-white p-4 rounded-full !z-50"
           >
             <v-icon name="bi-camera" scale="1" />
           </Button>
@@ -104,23 +186,62 @@ function takePicture() {
       </div>
     </div>
 
-    <div class="h-1/2 w-full"></div>
+    <!-- dialog w/ barcodes -->
+    <div
+      v-if="showBarcodeDialog"
+      class="absolute top-0 left-0 w-full h-full z-50"
+    >
+      <Dialog open="showBarcodeDialog">
+        <DialogContent class="w-5/6 h-1/2 max-h-[90vh]">
+          <div class="w-full h-full baseVertFlex !justify-between">
+            <DialogHeader>
+              <!-- maybe specify how many barcodes were found? -->
+              <DialogTitle>Barcodes found in scan</DialogTitle>
+            </DialogHeader>
+            <!-- <DialogDescription>test</DialogDescription> -->
 
-    <img :src="imageBase64" />
+            <!-- barcode map displayed here -->
+            <div
+              ref="canvasContainer"
+              class="baseVertFlex gap-2 w-full h-full [&_canvas]:rounded-md"
+            >
+              <div v-if="canvasElements.length === 0">No barcodes found</div>
+            </div>
+
+            <DialogFooter>
+              <Button class="baseFlex gap-2" @click="scanMoreBarcodes">
+                Scan more barcodes
+                <v-icon name="bi-camera" scale="1" />
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #42b883aa);
+.bg-gradient-to-center {
+  background: linear-gradient(
+      to right,
+      rgba(0, 0, 0, 1) 0%,
+      rgba(0, 0, 0, 0.75) 10%,
+      transparent 15%,
+      transparent 50%,
+      transparent 85%,
+      rgba(0, 0, 0, 0.75) 90%,
+      rgba(0, 0, 0, 1) 100%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 1) 0%,
+      rgba(0, 0, 0, 0.75) 35%,
+      transparent 45%,
+      transparent 50%,
+      transparent 65%,
+      rgba(0, 0, 0, 0.75) 70%,
+      rgba(0, 0, 0, 1) 100%
+    );
 }
 </style>
