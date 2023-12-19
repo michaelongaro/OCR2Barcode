@@ -23,6 +23,7 @@ const canvasElements = ref([] as HTMLCanvasElement[]);
 const imageBase64 = ref("");
 
 onMounted(async () => {
+  // @ts-expect-error asdf
   const permissions = await navigator.permissions.query({ name: "camera" });
 
   if (permissions.state === "granted") {
@@ -37,6 +38,7 @@ function initializeCamera() {
     },
   };
 
+  // @ts-expect-error asdf
   navigator.mediaDevices.getUserMedia(constraints).then(async (stream) => {
     showingCamera.value = true;
     await nextTick();
