@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// import HelloWorld from "./components/HelloWorld.vue";
 import { ref, nextTick, onMounted } from "vue";
 import { Button } from "@/components/ui/button";
 // import { useTheme } from "@/components/composables/useTheme";
