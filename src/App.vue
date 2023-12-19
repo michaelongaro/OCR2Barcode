@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted } from "vue";
 import { Button } from "@/components/ui/button";
-// import { useTheme } from "@/components/composables/useTheme";
+import { useTheme } from "@/components/composables/useTheme";
 import {
   Dialog,
   DialogContent,
@@ -11,12 +11,13 @@ import {
 } from "@/components/ui/dialog";
 import Tesseract from "tesseract.js";
 import JsBarcode from "jsbarcode";
-// import Patterns from "@/components/Patterns.vue";
 
-// const { theme, toggleTheme } = useTheme();
+const { theme, toggleTheme } = useTheme();
 
 const showingCamera = ref(false);
 const showBarcodeDialog = ref(false);
+const showingLoadingSpinner = ref(false);
+
 const canvasContainer = ref(null as HTMLDivElement | null);
 const canvasElements = ref([] as HTMLCanvasElement[]);
 const imageBase64 = ref("");
@@ -56,6 +57,8 @@ function scanMoreBarcodes() {
 }
 
 function takePicture() {
+  showingLoadingSpinner.value = true;
+
   // get image from canvas
   const player = document.getElementById("player");
   if (player instanceof HTMLVideoElement) {
@@ -85,8 +88,8 @@ function takePicture() {
         const matches = parseThroughExtractedText(text);
 
         showBarcodeDialog.value = true;
-
         await nextTick();
+        showingLoadingSpinner.value = false;
 
         matches.forEach((_) => {
           const canvas = document.createElement("canvas");
@@ -105,6 +108,27 @@ function takePicture() {
         matches.forEach((match, index) => {
           generateBarcode(canvasElements.value[index], match);
         });
+      });
+    }
+  }
+}
+
+function focusCamera(event: MouseEvent) {
+  console.log("clicked", event.clientX, event.clientY);
+  const player = document.getElementById("player");
+  if (
+    player instanceof HTMLVideoElement &&
+    player.srcObject instanceof MediaStream
+  ) {
+    const videoTrack = player.srcObject.getVideoTracks()[0];
+    const capabilities = videoTrack.getCapabilities();
+    if ("pointsOfInterest" in capabilities) {
+      const rect = player.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / rect.width;
+      const y = (event.clientY - rect.top) / rect.height;
+      videoTrack.applyConstraints({
+        // @ts-expect-error asdf
+        advanced: [{ pointsOfInterest: [{ x, y }] }],
       });
     }
   }
@@ -149,32 +173,42 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
 </script>
 
 <template>
-  <div class="baseVertFlex h-[100vh]">
-    <!-- <div class="w-full bg-slate-800 h-16 baseFlex !justify-between px-8">
-      <h1>Ocr2Barcode</h1>
-      <Button @click="toggleTheme" class="!p-3">
-        <v-icon v-if="theme === 'light'" name="bi-sun" scale="1" />
-        <v-icon v-else name="bi-moon-stars" scale="1" />
-      </Button>
-    </div> -->
-
-    <!-- <HelloWorld msg="Welcome to Your Vue.js + TypeScript App" /> -->
+  <div class="baseVertFlex relative h-dvh">
     <div class="h-full w-full relative">
       <div v-if="showingCamera" class="container relative h-full w-full">
-        <video id="player" autoplay class="w-full h-full z-[1]"></video>
+        <video id="player" autoplay class="w-full h-dvh z-[1]"></video>
 
         <div class="absolute w-full h-full baseFlex top-0 left-0">
           <div
+            @click="focusCamera"
             class="border-red-700 border-2 rounded-lg w-3/4 h-1/4 z-[2]"
           ></div>
         </div>
 
         <div class="absolute bottom-16 left-1/2 -translate-x-1/2 !z-50">
-          <Button
-            @click="takePicture"
-            class="bg-slate-800 text-white p-4 rounded-full !z-50"
-          >
-            <v-icon name="bi-camera" scale="1" />
+          <Button @click="takePicture" class="p-4 rounded-full !z-50">
+            <v-icon v-if="!showingLoadingSpinner" name="bi-camera" scale="1" />
+            <svg
+              v-else
+              class="animate-spin size-5 text-secondary dark:text-primary"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              ></circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
           </Button>
         </div>
       </div>
@@ -182,7 +216,7 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
         <div class="absolute w-full h-full top-0 left-0 baseFlex">
           <Button
             @click="initializeCamera"
-            class="bg-slate-800 baseFlex gap-2 text-white p-8 rounded-lg"
+            class="baseFlex gap-2 p-8 rounded-lg"
           >
             Start scanning
             <v-icon name="bi-camera" scale="1" />
@@ -190,6 +224,16 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
         </div>
       </div>
     </div>
+
+    <Button
+      variant="ghost"
+      size="icon"
+      @click="toggleTheme"
+      class="!p-2.5 absolute top-4 right-4"
+    >
+      <v-icon v-if="theme === 'light'" name="bi-moon-stars" scale="1" />
+      <v-icon v-else name="bi-sun" scale="1" />
+    </Button>
 
     <!-- dialog w/ barcodes -->
     <Dialog v-model:open="showBarcodeDialog">
