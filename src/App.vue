@@ -34,10 +34,10 @@ function initializeCamera() {
   const constraints = {
     video: {
       focusMode: ["continuous"],
+      facingMode: "environment",
     },
   };
 
-  // @ts-expect-error asdf
   navigator.mediaDevices.getUserMedia(constraints).then(async (stream) => {
     showingCamera.value = true;
     await nextTick();
@@ -164,14 +164,9 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
         <video id="player" autoplay class="w-full h-full z-[1]"></video>
 
         <div class="absolute w-full h-full baseFlex top-0 left-0">
-          <div class="border-red-700 border-2 rounded-lg w-3/4 h-1/4 z-[2]">
-            <!-- <div
-              class="absolute w-full h-full z-[2] pointer-events-none brightness-150"
-            ></div> -->
-          </div>
-          <!-- <div
-            class="absolute top-0 left-0 w-full h-full bg-gradient-to-center from-transparent via-transparent to-[rgba(0,0,0,0.5)] z-[3]"
-          ></div> -->
+          <div
+            class="border-red-700 border-2 rounded-lg w-3/4 h-1/4 z-[2]"
+          ></div>
         </div>
 
         <div class="absolute bottom-16 left-1/2 -translate-x-1/2 !z-50">
@@ -187,7 +182,7 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
         <div class="absolute w-full h-full top-0 left-0 baseFlex">
           <Button
             @click="initializeCamera"
-            class="bg-slate-800 baseFlex gap-2 text-white p-8 rounded-full"
+            class="bg-slate-800 baseFlex gap-2 text-white p-8 rounded-lg"
           >
             Start scanning
             <v-icon name="bi-camera" scale="1" />
@@ -240,6 +235,6 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
   background: rgba(0, 0, 0, 0); /* fully transparent */
   box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.75); /* darken the rest of the video */
   pointer-events: none; /* allow interaction with the video */
-  border-radius: 0.375rem;
+  border-radius: 0.5rem;
 }
 </style>
