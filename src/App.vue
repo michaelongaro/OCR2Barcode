@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // import HelloWorld from "./components/HelloWorld.vue";
-import { ref, nextTick } from "vue";
+import { ref, nextTick, onMounted } from "vue";
 import { Button } from "@/components/ui/button";
-import { useTheme } from "@/components/composables/useTheme";
+// import { useTheme } from "@/components/composables/useTheme";
 import {
   Dialog,
   DialogContent,
@@ -14,13 +14,21 @@ import Tesseract from "tesseract.js";
 import JsBarcode from "jsbarcode";
 // import Patterns from "@/components/Patterns.vue";
 
-const { theme, toggleTheme } = useTheme();
+// const { theme, toggleTheme } = useTheme();
 
 const showingCamera = ref(false);
 const showBarcodeDialog = ref(false);
 const canvasContainer = ref(null as HTMLDivElement | null);
 const canvasElements = ref([] as HTMLCanvasElement[]);
 const imageBase64 = ref("");
+
+onMounted(async () => {
+  const permissions = await navigator.permissions.query({ name: "camera" });
+
+  if (permissions.state === "granted") {
+    initializeCamera();
+  }
+});
 
 function initializeCamera() {
   const constraints = {
@@ -141,17 +149,17 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
 
 <template>
   <div class="baseVertFlex h-[100vh]">
-    <div class="w-full bg-slate-800 h-16 baseFlex !justify-between px-8">
+    <!-- <div class="w-full bg-slate-800 h-16 baseFlex !justify-between px-8">
       <h1>Ocr2Barcode</h1>
       <Button @click="toggleTheme" class="!p-3">
         <v-icon v-if="theme === 'light'" name="bi-sun" scale="1" />
         <v-icon v-else name="bi-moon-stars" scale="1" />
       </Button>
-    </div>
+    </div> -->
 
     <!-- <HelloWorld msg="Welcome to Your Vue.js + TypeScript App" /> -->
     <div class="h-full w-full relative">
-      <div v-if="showingCamera" class="h-full w-full">
+      <div v-if="showingCamera" class="container relative h-full w-full">
         <video id="player" autoplay class="w-full h-full z-[1]"></video>
 
         <div class="absolute w-full h-full baseFlex top-0 left-0">
@@ -160,12 +168,12 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
               class="absolute w-full h-full z-[2] pointer-events-none brightness-150"
             ></div> -->
           </div>
-          <div
+          <!-- <div
             class="absolute top-0 left-0 w-full h-full bg-gradient-to-center from-transparent via-transparent to-[rgba(0,0,0,0.5)] z-[3]"
-          ></div>
+          ></div> -->
         </div>
 
-        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 !z-50">
+        <div class="absolute bottom-16 left-1/2 -translate-x-1/2 !z-50">
           <Button
             @click="takePicture"
             class="bg-slate-800 text-white p-4 rounded-full !z-50"
@@ -178,8 +186,9 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
         <div class="absolute w-full h-full top-0 left-0 baseFlex">
           <Button
             @click="initializeCamera"
-            class="bg-slate-800 text-white p-4 rounded-full"
+            class="bg-slate-800 baseFlex gap-2 text-white p-8 rounded-full"
           >
+            Start scanning
             <v-icon name="bi-camera" scale="1" />
           </Button>
         </div>
@@ -187,61 +196,49 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
     </div>
 
     <!-- dialog w/ barcodes -->
-    <div
-      v-if="showBarcodeDialog"
-      class="absolute top-0 left-0 w-full h-full z-50"
-    >
-      <Dialog open="showBarcodeDialog">
-        <DialogContent class="w-5/6 h-1/2 max-h-[90vh]">
-          <div class="w-full h-full baseVertFlex !justify-between">
-            <DialogHeader>
-              <!-- maybe specify how many barcodes were found? -->
-              <DialogTitle>Barcodes found in scan</DialogTitle>
-            </DialogHeader>
-            <!-- <DialogDescription>test</DialogDescription> -->
+    <Dialog v-model:open="showBarcodeDialog">
+      <DialogContent class="w-5/6 h-1/2 max-h-[90vh]">
+        <div class="w-full h-full baseVertFlex !justify-between">
+          <DialogHeader>
+            <!-- maybe specify how many barcodes were found? -->
+            <DialogTitle>Scan results</DialogTitle>
+          </DialogHeader>
+          <!-- <DialogDescription>test</DialogDescription> -->
 
-            <!-- barcode map displayed here -->
-            <div
-              ref="canvasContainer"
-              class="baseVertFlex gap-2 w-full h-full [&_canvas]:rounded-md"
-            >
-              <div v-if="canvasElements.length === 0">No barcodes found</div>
+          <!-- barcode map displayed here -->
+          <div
+            ref="canvasContainer"
+            class="baseVertFlex gap-2 w-full h-full [&_canvas]:rounded-md"
+          >
+            <div v-if="canvasElements.length === 0" class="baseVertFlex gap-2">
+              No barcodes detected
+              <v-icon name="io-sad-sharp" scale="1" />
             </div>
-
-            <DialogFooter>
-              <Button class="baseFlex gap-2" @click="scanMoreBarcodes">
-                Scan more barcodes
-                <v-icon name="bi-camera" scale="1" />
-              </Button>
-            </DialogFooter>
           </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+
+          <DialogFooter>
+            <Button class="baseFlex gap-4" @click="scanMoreBarcodes">
+              Scan more barcodes
+              <v-icon name="bi-camera" scale="1" />
+            </Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
 
 <style scoped>
-.bg-gradient-to-center {
-  background: linear-gradient(
-      to right,
-      rgba(0, 0, 0, 1) 0%,
-      rgba(0, 0, 0, 0.75) 10%,
-      transparent 15%,
-      transparent 50%,
-      transparent 85%,
-      rgba(0, 0, 0, 0.75) 90%,
-      rgba(0, 0, 0, 1) 100%
-    ),
-    linear-gradient(
-      to bottom,
-      rgba(0, 0, 0, 1) 0%,
-      rgba(0, 0, 0, 0.75) 35%,
-      transparent 45%,
-      transparent 50%,
-      transparent 65%,
-      rgba(0, 0, 0, 0.75) 70%,
-      rgba(0, 0, 0, 1) 100%
-    );
+.container::after {
+  content: "";
+  position: absolute;
+  top: 37.5%; /* adjust these values based on the desired rectangle size */
+  left: 12.5%;
+  right: 12.5%;
+  bottom: 37.5%;
+  background: rgba(0, 0, 0, 0); /* fully transparent */
+  box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.75); /* darken the rest of the video */
+  pointer-events: none; /* allow interaction with the video */
+  border-radius: 0.375rem;
 }
 </style>
