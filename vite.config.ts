@@ -17,6 +17,7 @@ export default defineConfig({
         description:
           "Uses OCR to read text from images and generates barcodes from the text.",
         theme_color: "#ffffff",
+        background_color: "#000000",
         icons: [
           {
             src: "android-chrome-192x192.png",
