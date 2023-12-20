@@ -201,7 +201,11 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
         </div>
 
         <div class="absolute bottom-16 left-1/2 -translate-x-1/2 !z-50">
-          <Button @click="takePicture" class="p-4 rounded-full !z-50">
+          <Button
+            aria-label="Take a picture"
+            @click="takePicture"
+            class="p-4 rounded-full !z-50"
+          >
             <v-icon v-if="!showingLoadingSpinner" name="bi-camera" scale="1" />
             <svg
               v-else
@@ -241,6 +245,7 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
     </div>
 
     <Button
+      aria-label="Toggle light/dark theme"
       variant="ghost"
       size="icon"
       @click="toggleTheme"
