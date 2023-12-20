@@ -90,15 +90,6 @@ async function takePicture() {
         corePath: "/tesseract/core",
       });
 
-      // Tesseract.createWorker(
-
-      // {
-      // workerPath: '../node_modules/tesseract.js/dist/worker.min.js',
-      // langPath: '../lang-data',
-      // corePath: '../node_modules/tesseract.js-core/tesseract-core.wasm.js',
-      // logger: m => console.log(m),
-      // })
-
       worker.recognize(dataURI).then(async ({ data: { text } }) => {
         const matches = parseThroughExtractedText(text);
 
@@ -123,27 +114,6 @@ async function takePicture() {
         matches.forEach((match, index) => {
           generateBarcode(canvasElements.value[index], match);
         });
-      });
-    }
-  }
-}
-
-function focusCamera(event: MouseEvent) {
-  console.log("clicked", event.clientX, event.clientY);
-  const player = document.getElementById("player");
-  if (
-    player instanceof HTMLVideoElement &&
-    player.srcObject instanceof MediaStream
-  ) {
-    const videoTrack = player.srcObject.getVideoTracks()[0];
-    const capabilities = videoTrack.getCapabilities();
-    if ("pointsOfInterest" in capabilities) {
-      const rect = player.getBoundingClientRect();
-      const x = (event.clientX - rect.left) / rect.width;
-      const y = (event.clientY - rect.top) / rect.height;
-      videoTrack.applyConstraints({
-        // @ts-expect-error asdf
-        advanced: [{ pointsOfInterest: [{ x, y }] }],
       });
     }
   }
@@ -195,7 +165,6 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
 
         <div class="absolute w-full h-full baseFlex top-0 left-0">
           <div
-            @click="focusCamera"
             class="border-red-700 border-2 rounded-lg w-3/4 h-1/4 z-[2]"
           ></div>
         </div>
