@@ -56,7 +56,7 @@ function scanMoreBarcodes() {
   canvasContainer.value = null;
 }
 
-function takePicture() {
+async function takePicture() {
   showingLoadingSpinner.value = true;
 
   // get image from canvas
@@ -84,7 +84,22 @@ function takePicture() {
       // stop video stream to save on resources
       // player.srcObject?.getVideoTracks().forEach((track) => track.stop());
 
-      Tesseract.recognize(dataURI, "eng").then(async ({ data: { text } }) => {
+      const worker = await Tesseract.createWorker("eng", 1, {
+        workerPath: "/tesseract/worker.min.js",
+        langPath: "/tesseract/lang-data",
+        corePath: "/tesseract/core",
+      });
+
+      // Tesseract.createWorker(
+
+      // {
+      // workerPath: '../node_modules/tesseract.js/dist/worker.min.js',
+      // langPath: '../lang-data',
+      // corePath: '../node_modules/tesseract.js-core/tesseract-core.wasm.js',
+      // logger: m => console.log(m),
+      // })
+
+      worker.recognize(dataURI).then(async ({ data: { text } }) => {
         const matches = parseThroughExtractedText(text);
 
         showBarcodeDialog.value = true;
