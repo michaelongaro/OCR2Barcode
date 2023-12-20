@@ -56,6 +56,7 @@ export default defineConfig({
       workbox: {
         cleanupOutdatedCaches: true,
         globPatterns: ["**/*.{js,css,html,ico,jpg,json,png,txt,svg}"],
+        maximumFileSizeToCacheInBytes: 5000000,
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith("/tesseract"),
