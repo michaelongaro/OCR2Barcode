@@ -12,10 +12,10 @@ export default defineConfig({
       includeAssets: [
         "tesseract/worker.min.js",
         "tesseract/lang-data/eng.traineddata.gz",
-        "tesseract/core/tesseract-core-lstm.wasm.js",
+        // "tesseract/core/tesseract-core-lstm.wasm.js",
         "tesseract/core/tesseract-core-simd-lstm.wasm.js",
-        "tesseract/core/tesseract-core-simd.wasm.js",
-        "tesseract/core/tesseract-core.wasm.js",
+        // "tesseract/core/tesseract-core-simd.wasm.js",
+        // "tesseract/core/tesseract-core.wasm.js",
       ],
       manifest: {
         name: "OCR2Barcode",
