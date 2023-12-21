@@ -9,14 +9,14 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: [
-        "tesseract/worker.min.js",
-        "tesseract/lang-data/eng.traineddata.gz",
-        // "tesseract/core/tesseract-core-lstm.wasm.js",
-        "tesseract/core/tesseract-core-simd-lstm.wasm.js",
-        // "tesseract/core/tesseract-core-simd.wasm.js",
-        // "tesseract/core/tesseract-core.wasm.js",
-      ],
+      // includeAssets: [
+      //   "tesseract/worker.min.js",
+      //   "tesseract/lang-data/eng.traineddata.gz",
+      //   // "tesseract/core/tesseract-core-lstm.wasm.js",
+      //   "tesseract/core/tesseract-core-simd-lstm.wasm.js",
+      //   // "tesseract/core/tesseract-core-simd.wasm.js",
+      //   // "tesseract/core/tesseract-core.wasm.js",
+      // ],
       manifest: {
         name: "OCR2Barcode",
         short_name: "OCR2Barcode",
@@ -53,17 +53,16 @@ export default defineConfig({
       devOptions: {
         enabled: true,
       },
-      workbox: {
-        cleanupOutdatedCaches: true,
-        globPatterns: ["**/*.{js,css,html,ico,jpg,json,png,txt,svg}"],
-        maximumFileSizeToCacheInBytes: 5000000,
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith("/tesseract"),
-            handler: "CacheFirst",
-          },
-        ],
-      },
+      // workbox: {
+      //   cleanupOutdatedCaches: true,
+      //   maximumFileSizeToCacheInBytes: 5000000,
+      //   runtimeCaching: [
+      //     {
+      //       urlPattern: ({ url }) => url.pathname.startsWith("/tesseract"),
+      //       handler: "CacheFirst",
+      //     },
+      //   ],
+      // },
     }),
   ],
   resolve: {
