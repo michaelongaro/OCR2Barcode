@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted, watchEffect } from "vue";
+import { ref, nextTick, onMounted } from "vue";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/composables/useTheme";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -46,13 +47,6 @@ onMounted(async () => {
   });
 });
 
-watchEffect(() => {
-  if (showingCamera.value && !showBarcodeDialog.value) {
-    scanMoreBarcodes();
-    // ^ causes flicker.. figure out how to be less janky
-  }
-});
-
 function showInstallPrompt() {
   if (deferredPrompt) {
     deferredPrompt.prompt();
@@ -70,8 +64,8 @@ function initializeCamera() {
     video: {
       focusMode: ["continuous"],
       facingMode: "environment",
-      width: window.innerWidth,
-      height: window.innerHeight,
+      width: { min: window.innerWidth },
+      height: { max: window.innerHeight },
     },
   };
 
@@ -195,7 +189,10 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
 <template>
   <div class="baseVertFlex relative h-dvh">
     <div class="h-full w-full relative">
-      <div v-if="showingCamera" class="mainContainer relative h-full w-full">
+      <div
+        v-if="showingCamera"
+        class="mainContainer baseFlex relative h-full w-full"
+      >
         <video id="player" autoplay></video>
 
         <div class="absolute w-full h-full baseFlex top-0 left-0">
@@ -271,14 +268,28 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
     </div>
 
     <!-- dialog w/ barcodes -->
-    <Dialog v-model:open="showBarcodeDialog">
+    <Dialog
+      v-model:open="showBarcodeDialog"
+      @update:open="
+        () => {
+          if (!showBarcodeDialog) {
+            scanMoreBarcodes();
+          }
+        }
+      "
+    >
       <DialogContent class="w-5/6 h-1/2 max-h-[90vh]">
         <div class="w-full h-full baseVertFlex !justify-between">
           <DialogHeader>
             <!-- maybe specify how many barcodes were found? -->
             <DialogTitle>Scan results</DialogTitle>
           </DialogHeader>
-          <!-- <DialogDescription>test</DialogDescription> -->
+          <DialogDescription>
+            <p v-if="canvasElements.length > 0" class="mt-2">
+              {{ canvasElements.length }} barcode
+              {{ canvasElements.length > 1 ? "s" : "" }} found
+            </p>
+          </DialogDescription>
 
           <!-- barcode map displayed here -->
           <div
@@ -312,7 +323,7 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
   right: 8.5%;
   bottom: 37.5%;
   background: rgba(0, 0, 0, 0); /* fully transparent */
-  box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.7); /* darken the rest of the video */
+  box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.5); /* darken the rest of the video */
   pointer-events: none; /* allow interaction with the video */
   border-radius: 0.5rem;
 }
