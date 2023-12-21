@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from "vue";
+import { ref, nextTick, onMounted, watchEffect } from "vue";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/composables/useTheme";
 import {
@@ -16,31 +16,69 @@ const { theme, toggleTheme } = useTheme();
 
 const showingCamera = ref(false);
 const showBarcodeDialog = ref(false);
-const showingLoadingSpinner = ref(false);
+const showingPostImageTakenLoadingSpinner = ref(false);
+const checkedCameraPermissions = ref(false);
 
+const videoStream = ref<MediaStream | null>(null);
 const canvasContainer = ref(null as HTMLDivElement | null);
 const canvasElements = ref([] as HTMLCanvasElement[]);
-const imageBase64 = ref("");
+
+const isPWA = ref(false);
+let deferredPrompt: any = null;
 
 onMounted(async () => {
+  isPWA.value = window.matchMedia("(display-mode: standalone)").matches;
+
   // @ts-expect-error asdf
   const permissions = await navigator.permissions.query({ name: "camera" });
 
   if (permissions.state === "granted") {
     initializeCamera();
   }
+
+  checkedCameraPermissions.value = true;
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    // Prevent Chrome 67 and earlier from automatically showing the prompt
+    e.preventDefault();
+    // Stash the event so it can be triggered later.
+    deferredPrompt = e;
+  });
 });
+
+watchEffect(() => {
+  if (showingCamera.value && !showBarcodeDialog.value) {
+    scanMoreBarcodes();
+    // ^ causes flicker.. figure out how to be less janky
+  }
+});
+
+function showInstallPrompt() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choiceResult: any) => {
+      if (choiceResult.outcome === "accepted") {
+        isPWA.value = true;
+      }
+      deferredPrompt = null;
+    });
+  }
+}
 
 function initializeCamera() {
   const constraints = {
     video: {
       focusMode: ["continuous"],
       facingMode: "environment",
+      width: window.innerWidth,
+      height: window.innerHeight,
     },
   };
 
+  showingCamera.value = true;
+
   navigator.mediaDevices.getUserMedia(constraints).then(async (stream) => {
-    showingCamera.value = true;
+    videoStream.value = stream;
     await nextTick();
     const player = document.getElementById("player");
     if (player instanceof HTMLVideoElement) {
@@ -54,10 +92,16 @@ function scanMoreBarcodes() {
   canvasElements.value = [];
   canvasContainer.value?.remove();
   canvasContainer.value = null;
+
+  const player = document.getElementById("player");
+  if (player instanceof HTMLVideoElement && videoStream.value) {
+    player.srcObject = videoStream.value;
+    player.play();
+  }
 }
 
 async function takePicture() {
-  showingLoadingSpinner.value = true;
+  showingPostImageTakenLoadingSpinner.value = true;
 
   // get image from canvas
   const player = document.getElementById("player");
@@ -68,10 +112,10 @@ async function takePicture() {
     const ctx = canvas.getContext("2d");
 
     if (ctx && player) {
-      const sx = player.videoWidth * 0.125; // Start at 12.5% of the video width (to center the 75% width crop)
-      const sy = player.videoHeight * 0.25; // Start at 25% of the video height (to center the 25% height crop)
-      const sWidth = player.videoWidth * 0.75; // 75% of the video width
-      const sHeight = player.videoHeight * 0.5; // 50% of the video height
+      const sx = player.videoWidth * 0.075; // Start at 7.5% of the video width (to center the 75% width crop)
+      const sy = player.videoHeight * 0.375; // Start at 37.5% of the video height (to center the 25% height crop)
+      const sWidth = player.videoWidth * 0.85; // 85% of the video width
+      const sHeight = player.videoHeight * 0.25; // 25% of the video height
 
       // Adjust the canvas size to match the source dimensions
       canvas.width = sWidth;
@@ -79,23 +123,20 @@ async function takePicture() {
 
       ctx.drawImage(player, sx, sy, sWidth, sHeight, 0, 0, sWidth, sHeight);
       const dataURI = canvas.toDataURL("image/jpeg");
-      imageBase64.value = dataURI;
 
-      // stop video stream to save on resources
-      // player.srcObject?.getVideoTracks().forEach((track) => track.stop());
+      // pausing the video stream to save on resources
+      if (player) {
+        player.pause();
+      }
 
-      const worker = await Tesseract.createWorker("eng", 1, {
-        workerPath: "/tesseract/worker.min.js",
-        langPath: "/tesseract/lang-data",
-        corePath: "/tesseract/core",
-      });
+      const worker = await Tesseract.createWorker("eng", 1);
 
       worker.recognize(dataURI).then(async ({ data: { text } }) => {
         const matches = parseThroughExtractedText(text);
 
         showBarcodeDialog.value = true;
         await nextTick();
-        showingLoadingSpinner.value = false;
+        showingPostImageTakenLoadingSpinner.value = false;
 
         matches.forEach((_) => {
           const canvas = document.createElement("canvas");
@@ -103,10 +144,7 @@ async function takePicture() {
           canvas.height = 100;
           canvasElements.value.push(canvas);
 
-          console.log(canvasContainer.value);
-
           canvasContainer.value?.appendChild(canvas);
-          console.log("appended");
         });
 
         await nextTick();
@@ -143,7 +181,6 @@ function parseThroughExtractedText(text: string) {
 }
 
 function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
-  console.log(barcodeText);
   JsBarcode(canvas, barcodeText, {
     format: "code39",
     displayValue: true,
@@ -152,30 +189,32 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
     height: 75,
     width: 1.5,
   });
-  // const dataURI = canvas.toDataURL("image/jpeg");
-  // imageBase64.value = dataURI;
 }
 </script>
 
 <template>
   <div class="baseVertFlex relative h-dvh">
     <div class="h-full w-full relative">
-      <div v-if="showingCamera" class="container relative h-full w-full">
-        <video id="player" autoplay class="w-full h-dvh z-[1]"></video>
+      <div v-if="showingCamera" class="mainContainer relative h-full w-full">
+        <video id="player" autoplay></video>
 
         <div class="absolute w-full h-full baseFlex top-0 left-0">
           <div
-            class="border-red-700 border-2 rounded-lg w-3/4 h-1/4 z-[2]"
+            class="border-red-700 border-2 rounded-lg w-5/6 h-1/4 z-10"
           ></div>
         </div>
 
-        <div class="absolute bottom-16 left-1/2 -translate-x-1/2 !z-50">
+        <div class="absolute bottom-16 left-1/2 -translate-x-1/2 z-10">
           <Button
             aria-label="Take a picture"
             @click="takePicture"
-            class="p-4 rounded-full !z-50"
+            class="p-4 rounded-full z-10"
           >
-            <v-icon v-if="!showingLoadingSpinner" name="bi-camera" scale="1" />
+            <v-icon
+              v-if="!showingPostImageTakenLoadingSpinner"
+              name="bi-camera"
+              scale="1"
+            />
             <svg
               v-else
               class="animate-spin size-5 text-secondary dark:text-primary"
@@ -200,7 +239,7 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
           </Button>
         </div>
       </div>
-      <div v-else class="h-full w-full">
+      <div v-else-if="checkedCameraPermissions" class="h-full w-full">
         <div class="absolute w-full h-full top-0 left-0 baseFlex">
           <Button
             @click="initializeCamera"
@@ -213,16 +252,23 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
       </div>
     </div>
 
-    <Button
-      aria-label="Toggle light/dark theme"
-      variant="ghost"
-      size="icon"
-      @click="toggleTheme"
-      class="!p-2.5 absolute top-4 right-4"
+    <div
+      class="baseFlex absolute top-4 left-0 px-4 w-full !justify-between sm:!justify-end sm:gap-4"
     >
-      <v-icon v-if="theme === 'light'" name="bi-moon-stars" scale="1" />
-      <v-icon v-else name="bi-sun" scale="1" />
-    </Button>
+      <Button v-if="!isPWA" @click="showInstallPrompt" class="baseFlex gap-2">
+        Install app
+        <v-icon name="hi-solid-download" scale="1" />
+      </Button>
+      <Button
+        aria-label="Toggle light/dark theme"
+        size="icon"
+        @click="toggleTheme"
+        class="!p-2.5"
+      >
+        <v-icon v-if="theme === 'light'" name="bi-moon-stars" scale="1" />
+        <v-icon v-else name="bi-sun" scale="1" />
+      </Button>
+    </div>
 
     <!-- dialog w/ barcodes -->
     <Dialog v-model:open="showBarcodeDialog">
@@ -258,15 +304,15 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
 </template>
 
 <style scoped>
-.container::after {
+.mainContainer::after {
   content: "";
   position: absolute;
   top: 37.5%; /* adjust these values based on the desired rectangle size */
-  left: 12.5%;
-  right: 12.5%;
+  left: 8.5%;
+  right: 8.5%;
   bottom: 37.5%;
   background: rgba(0, 0, 0, 0); /* fully transparent */
-  box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.75); /* darken the rest of the video */
+  box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.7); /* darken the rest of the video */
   pointer-events: none; /* allow interaction with the video */
   border-radius: 0.5rem;
 }
