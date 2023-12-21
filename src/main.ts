@@ -10,6 +10,7 @@ import {
   MdEditnoteRound,
   MdDeleteforeverRound,
   IoSadSharp,
+  HiSolidDownload,
 } from "oh-vue-icons/icons";
 
 addIcons(
@@ -18,7 +19,8 @@ addIcons(
   BiCamera,
   MdEditnoteRound,
   MdDeleteforeverRound,
-  IoSadSharp
+  IoSadSharp,
+  HiSolidDownload
 );
 const app = createApp(App);
 app.component("v-icon", OhVueIcon);
