@@ -45,7 +45,25 @@ onMounted(async () => {
     // Stash the event so it can be triggered later.
     deferredPrompt = e;
   });
+
+  window.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      if (permissions.state === "granted") {
+        initializeCamera();
+      }
+    } else {
+      if (videoStream.value) {
+        videoStream.value.getTracks().forEach((track) => track.stop());
+      }
+    }
+  });
+
+  // TODO: error handling for if camera is already in use by another app (just show a message saying exactly that?)
+  // also if user revokes camera permissions while using the app, need to handle that as well maybe
 });
+
+// choosing to not unsubscribe from listeners added above since this is a SPA
+// and the listeners will be needed for the entire lifetime of the app
 
 function showInstallPrompt() {
   if (deferredPrompt) {
