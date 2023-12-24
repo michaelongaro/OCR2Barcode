@@ -186,6 +186,7 @@ function parseThroughExtractedText(text: string) {
 
     if (isBackroomLocation(substring) || isDPCI(substring)) {
       matches.push(substring);
+      i += 8; // skip ahead 8 characters since we already found a match
     }
   }
 
