@@ -297,32 +297,42 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
         }
       "
     >
-      <DialogContent class="w-5/6 h-1/2 max-h-[90vh]">
-        <div class="w-full h-full baseVertFlex !justify-between">
-          <DialogHeader>
-            <!-- maybe specify how many barcodes were found? -->
-            <DialogTitle>Scan results</DialogTitle>
-          </DialogHeader>
-          <DialogDescription>
-            <p v-if="canvasElements.length > 0" class="mt-2">
-              {{ canvasElements.length }} barcode
-              {{ canvasElements.length > 1 ? "s" : "" }} found
-            </p>
-          </DialogDescription>
+      <DialogContent class="baseVertFlex w-5/6 min-h-[35vh] max-h-[90vh]">
+        <div class="baseVertFlex !justify-between min-h-[35vh] max-h-[90vh]">
+          <div class="baseVertFlex gap-2">
+            <DialogHeader>
+              <DialogTitle>Scan results</DialogTitle>
+            </DialogHeader>
+            <DialogDescription>
+              <p v-if="canvasElements.length > 0" class="mt-2 mb-4">
+                {{ canvasElements.length }}
+                {{ canvasElements.length > 1 ? "barcodes" : "barcode" }} found
+              </p>
+            </DialogDescription>
+          </div>
 
-          <!-- barcode map displayed here -->
           <div
-            ref="canvasContainer"
-            class="baseVertFlex gap-2 w-full h-full [&_canvas]:rounded-md"
+            v-show="canvasElements.length > 0"
+            class="w-full h-full baseFlex !items-start overflow-y-scroll"
           >
-            <div v-if="canvasElements.length === 0" class="baseVertFlex gap-2">
+            <div
+              ref="canvasContainer"
+              class="baseVertFlex gap-4 w-full h-full rounded-md"
+            ></div>
+          </div>
+
+          <div
+            v-show="canvasElements.length === 0"
+            class="baseVertFlex gap-4 w-full h-[200px] rounded-md"
+          >
+            <div class="baseVertFlex gap-2">
               No barcodes detected
               <v-icon name="io-sad-sharp" scale="1" />
             </div>
           </div>
 
           <DialogFooter>
-            <Button class="baseFlex gap-4" @click="scanMoreBarcodes">
+            <Button class="flex gap-4 mt-4" @click="scanMoreBarcodes">
               Scan more barcodes
               <v-icon name="bi-camera" scale="1" />
             </Button>
