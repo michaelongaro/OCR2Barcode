@@ -212,7 +212,7 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
         v-if="showingCamera"
         class="mainContainer baseFlex relative h-full w-full"
       >
-        <video id="player" autoplay></video>
+        <video id="player" autoplay playsinline></video>
 
         <div class="absolute w-full h-full baseFlex top-0 left-0">
           <div
