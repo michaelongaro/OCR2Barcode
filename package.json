@@ -20,7 +20,7 @@
     "tailwindcss-animate": "^1.0.7",
     "tesseract.js": "^5.0.3",
     "vite-plugin-pwa": "^0.17.4",
-    "vue": "^3.3.13"
+    "vue": "^3.4.13"
   },
   "devDependencies": {
     "@types/node": "^20.10.4",
