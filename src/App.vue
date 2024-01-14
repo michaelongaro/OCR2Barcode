@@ -124,10 +124,10 @@ async function takePicture() {
     const ctx = canvas.getContext("2d");
 
     if (ctx && player) {
-      const sx = player.videoWidth * 0.075; // Start at 7.5% of the video width (to center the 75% width crop)
-      const sy = player.videoHeight * 0.375; // Start at 37.5% of the video height (to center the 25% height crop)
-      const sWidth = player.videoWidth * 0.85; // 85% of the video width
-      const sHeight = player.videoHeight * 0.25; // 25% of the video height
+      const sx = player.videoWidth * 0.15; // Start at 7.5% of the video width (to center the 75% width crop)
+      const sy = player.videoHeight * 0.4; // Start at 37.5% of the video height (to center the 25% height crop)
+      const sWidth = player.videoWidth * 0.7; // 85% of the video width
+      const sHeight = player.videoHeight * 0.2; // 25% of the video height
 
       // Adjust the canvas size to match the source dimensions
       canvas.width = sWidth;
@@ -216,7 +216,7 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
 
         <div class="absolute w-full h-full baseFlex top-0 left-0">
           <div
-            class="border-red-700 border-2 rounded-lg w-5/6 h-1/4 z-10"
+            class="border-red-700 border-2 rounded-lg w-[70%] h-[20%] z-10"
           ></div>
         </div>
 
@@ -347,10 +347,10 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
 .mainContainer::after {
   content: "";
   position: absolute;
-  top: 37.5%; /* adjust these values based on the desired rectangle size */
-  left: 8.5%;
-  right: 8.5%;
-  bottom: 37.5%;
+  top: 40%; /* adjust these values based on the desired rectangle size */
+  left: 15%;
+  right: 15%;
+  bottom: 40%;
   background: rgba(0, 0, 0, 0); /* fully transparent */
   box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.5); /* darken the rest of the video */
   pointer-events: none; /* allow interaction with the video */
