@@ -21,7 +21,6 @@ const appMode = ref<"manual" | "ocr">("manual");
 // Manual input mode state
 const manualInputType = ref<"location" | "dpci">("location");
 const manualInputValue = ref("");
-const manualBarcodeCanvas = ref<HTMLCanvasElement | null>(null);
 const showManualBarcodeDialog = ref(false);
 
 // OCR mode state
