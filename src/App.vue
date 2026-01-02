@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from "vue";
+import { ref, nextTick, onMounted, computed, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/composables/useTheme";
 import {
@@ -15,6 +15,16 @@ import JsBarcode from "jsbarcode";
 
 const { theme, toggleTheme } = useTheme();
 
+// Main mode toggle: 'manual' or 'ocr'
+const appMode = ref<"manual" | "ocr">("manual");
+
+// Manual input mode state
+const manualInputType = ref<"location" | "dpci">("location");
+const manualInputValue = ref("");
+const manualBarcodeCanvas = ref<HTMLCanvasElement | null>(null);
+const showManualBarcodeDialog = ref(false);
+
+// OCR mode state
 const showingCamera = ref(false);
 const showBarcodeDialog = ref(false);
 const showingPostImageTakenLoadingSpinner = ref(false);
@@ -23,6 +33,98 @@ const checkedCameraPermissions = ref(false);
 const videoStream = ref<MediaStream | null>(null);
 const canvasContainer = ref(null as HTMLDivElement | null);
 const canvasElements = ref([] as HTMLCanvasElement[]);
+
+// Computed values for manual input
+const rawInputValue = computed(() => {
+  // Strip all non-alphanumeric characters for validation
+  return manualInputValue.value.replace(/[-\s]/g, "").toUpperCase();
+});
+
+const isValidInput = computed(() => {
+  if (manualInputType.value === "dpci") {
+    return /^\d{9}$/.test(rawInputValue.value);
+  } else {
+    return rawInputValue.value.length === 8;
+  }
+});
+
+// Format input as user types
+function formatManualInput(value: string) {
+  // Remove all non-relevant characters
+  let cleaned = "";
+
+  if (manualInputType.value === "dpci") {
+    // For DPCI, only allow digits
+    cleaned = value.replace(/\D/g, "").slice(0, 9);
+
+    // Format as XXX-XX-XXXX
+    if (cleaned.length <= 3) {
+      return cleaned;
+    } else if (cleaned.length <= 5) {
+      return `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+    } else {
+      return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 5)}-${cleaned.slice(
+        5
+      )}`;
+    }
+  } else {
+    // For Location, allow alphanumeric
+    cleaned = value
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .toUpperCase()
+      .slice(0, 8);
+
+    // Format as XXX XX XXX
+    if (cleaned.length <= 3) {
+      return cleaned;
+    } else if (cleaned.length <= 5) {
+      return `${cleaned.slice(0, 3)} ${cleaned.slice(3)}`;
+    } else {
+      return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 5)} ${cleaned.slice(
+        5
+      )}`;
+    }
+  }
+}
+
+function handleManualInput(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const formatted = formatManualInput(target.value);
+  manualInputValue.value = formatted;
+  // Update the input element directly to handle cursor position
+  target.value = formatted;
+}
+
+// Clear input when switching input types
+watch(manualInputType, () => {
+  manualInputValue.value = "";
+});
+
+// Stop camera when switching to manual mode
+watch(appMode, (newMode) => {
+  if (newMode === "manual" && videoStream.value) {
+    videoStream.value.getTracks().forEach((track) => track.stop());
+    showingCamera.value = false;
+  }
+});
+
+async function generateManualBarcode() {
+  if (!isValidInput.value) return;
+
+  showManualBarcodeDialog.value = true;
+  await nextTick();
+
+  const canvas = document.getElementById(
+    "manualBarcodeCanvas"
+  ) as HTMLCanvasElement;
+  if (canvas) {
+    generateBarcode(canvas, rawInputValue.value);
+  }
+}
+
+function closeManualBarcodeDialog() {
+  showManualBarcodeDialog.value = false;
+}
 
 const isPWA = ref(false);
 let deferredPrompt: any = null;
@@ -207,7 +309,54 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
 
 <template>
   <div class="baseVertFlex relative h-dvh">
-    <div class="h-full w-full relative">
+    <!-- Manual Input Mode -->
+    <div v-if="appMode === 'manual'" class="h-full w-full baseFlex">
+      <div class="baseVertFlex gap-6 w-full max-w-md px-4">
+        <!-- DPCI / Location Toggle -->
+        <div class="baseFlex gap-2 bg-secondary/20 rounded-lg p-1">
+          <Button
+            :variant="manualInputType === 'location' ? 'default' : 'ghost'"
+            @click="manualInputType = 'location'"
+            class="flex-1"
+          >
+            Location
+          </Button>
+          <Button
+            :variant="manualInputType === 'dpci' ? 'default' : 'ghost'"
+            @click="manualInputType = 'dpci'"
+            class="flex-1"
+          >
+            DPCI
+          </Button>
+        </div>
+
+        <!-- Input Field -->
+        <div class="w-full baseFlex">
+          <input
+            :value="manualInputValue"
+            @input="handleManualInput"
+            :inputmode="manualInputType === 'dpci' ? 'tel' : 'text'"
+            :placeholder="
+              manualInputType === 'dpci' ? 'XXX-XX-XXXX' : 'XXX XX XXX'
+            "
+            class="w-full text-center text-2xl tracking-widest p-4 rounded-lg border-2 border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors"
+          />
+        </div>
+
+        <!-- Generate Button -->
+        <Button
+          @click="generateManualBarcode"
+          :disabled="!isValidInput"
+          class="baseFlex gap-2 p-6 text-lg"
+        >
+          Generate Barcode
+          <v-icon name="bi-upc-scan" scale="1.2" />
+        </Button>
+      </div>
+    </div>
+
+    <!-- OCR Mode -->
+    <div v-else class="h-full w-full relative">
       <div
         v-if="showingCamera"
         class="mainContainer baseFlex relative h-full w-full"
@@ -268,25 +417,91 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
       </div>
     </div>
 
+    <!-- Top Bar with Controls -->
     <div
       class="baseFlex absolute top-4 left-0 px-4 w-full !justify-between sm:!justify-end sm:gap-4"
     >
-      <Button v-if="!isPWA" @click="showInstallPrompt" class="baseFlex gap-2">
-        Install app
-        <v-icon name="hi-solid-download" scale="1" />
-      </Button>
-      <Button
-        aria-label="Toggle light/dark theme"
-        size="icon"
-        @click="toggleTheme"
-        class="!p-2.5"
-      >
-        <v-icon v-if="theme === 'light'" name="bi-moon-stars" scale="1" />
-        <v-icon v-else name="bi-sun" scale="1" />
-      </Button>
+      <div class="baseFlex gap-2">
+        <Button v-if="!isPWA" @click="showInstallPrompt" class="baseFlex gap-2">
+          Install app
+          <v-icon name="hi-solid-download" scale="1" />
+        </Button>
+      </div>
+      <div class="baseFlex gap-2">
+        <!-- Manual / OCR Mode Toggle -->
+        <div class="baseFlex gap-1 bg-secondary/20 rounded-lg p-1">
+          <Button
+            :variant="appMode === 'manual' ? 'default' : 'ghost'"
+            @click="appMode = 'manual'"
+            size="sm"
+            class="baseFlex gap-1"
+          >
+            <v-icon name="bi-keyboard" scale="0.9" />
+            <span class="hidden sm:inline">Manual</span>
+          </Button>
+          <Button
+            :variant="appMode === 'ocr' ? 'default' : 'ghost'"
+            @click="appMode = 'ocr'"
+            size="sm"
+            class="baseFlex gap-1"
+          >
+            <v-icon name="bi-camera" scale="0.9" />
+            <span class="hidden sm:inline">OCR</span>
+          </Button>
+        </div>
+        <!-- Theme Toggle -->
+        <Button
+          aria-label="Toggle light/dark theme"
+          size="icon"
+          @click="toggleTheme"
+          class="!p-2.5"
+        >
+          <v-icon v-if="theme === 'light'" name="bi-moon-stars" scale="1" />
+          <v-icon v-else name="bi-sun" scale="1" />
+        </Button>
+      </div>
     </div>
 
-    <!-- dialog w/ barcodes -->
+    <!-- Manual Barcode Dialog -->
+    <Dialog
+      v-model:open="showManualBarcodeDialog"
+      @update:open="
+        () => {
+          if (!showManualBarcodeDialog) {
+            closeManualBarcodeDialog();
+          }
+        }
+      "
+    >
+      <DialogContent class="baseVertFlex w-5/6 min-h-[35vh] max-h-[90vh]">
+        <div class="baseVertFlex !justify-between min-h-[35vh] max-h-[90vh]">
+          <div class="baseVertFlex gap-2">
+            <DialogHeader>
+              <DialogTitle>Generated Barcode</DialogTitle>
+            </DialogHeader>
+            <DialogDescription>
+              <p class="mt-2 mb-4">
+                {{ manualInputType === "dpci" ? "DPCI" : "Location" }}:
+                {{ manualInputValue }}
+              </p>
+            </DialogDescription>
+          </div>
+
+          <div class="w-full h-full baseFlex">
+            <canvas id="manualBarcodeCanvas" width="250" height="100"></canvas>
+          </div>
+
+          <DialogFooter>
+            <Button class="flex gap-4 mt-4" @click="closeManualBarcodeDialog">
+              Done
+              <v-icon name="bi-check-lg" scale="1" />
+            </Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <!-- OCR Barcode Dialog -->
     <Dialog
       v-model:open="showBarcodeDialog"
       @update:open="
