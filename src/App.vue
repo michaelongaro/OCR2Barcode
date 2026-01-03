@@ -99,11 +99,22 @@ watch(manualInputType, () => {
   manualInputValue.value = "";
 });
 
-// Stop camera when switching to manual mode
-watch(appMode, (newMode) => {
-  if (newMode === "manual" && videoStream.value) {
-    videoStream.value.getTracks().forEach((track) => track.stop());
+// Handle camera when switching modes
+watch(appMode, async (newMode) => {
+  if (newMode === "manual") {
+    // Stop camera when switching to manual mode
+    if (videoStream.value) {
+      videoStream.value.getTracks().forEach((track) => track.stop());
+      videoStream.value = null;
+    }
     showingCamera.value = false;
+  } else if (newMode === "ocr") {
+    // Initialize camera when switching to OCR mode if permissions are granted
+    // @ts-expect-error asdf
+    const permissions = await navigator.permissions.query({ name: "camera" });
+    if (permissions.state === "granted") {
+      initializeCamera();
+    }
   }
 });
 
@@ -134,7 +145,8 @@ onMounted(async () => {
   // @ts-expect-error asdf
   const permissions = await navigator.permissions.query({ name: "camera" });
 
-  if (permissions.state === "granted") {
+  // Only initialize camera if in OCR mode
+  if (permissions.state === "granted" && appMode.value === "ocr") {
     initializeCamera();
   }
 
@@ -147,9 +159,10 @@ onMounted(async () => {
     deferredPrompt = e;
   });
 
-  window.addEventListener("visibilitychange", () => {
+  window.addEventListener("visibilitychange", async () => {
     if (document.visibilityState === "visible") {
-      if (permissions.state === "granted") {
+      // Only initialize camera if in OCR mode
+      if (permissions.state === "granted" && appMode.value === "ocr") {
         initializeCamera();
       }
     } else {
