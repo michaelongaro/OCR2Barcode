@@ -43,7 +43,7 @@ const isValidInput = computed(() => {
   if (manualInputType.value === "dpci") {
     return /^\d{9}$/.test(rawInputValue.value);
   } else {
-    return rawInputValue.value.length === 8;
+    return rawInputValue.value.length === 9;
   }
 });
 
@@ -71,16 +71,16 @@ function formatManualInput(value: string) {
     cleaned = value
       .replace(/[^a-zA-Z0-9]/g, "")
       .toUpperCase()
-      .slice(0, 8);
+      .slice(0, 9);
 
-    // Format as XXX XX XXX
+    // Format as XXX XXX XXX
     if (cleaned.length <= 3) {
       return cleaned;
-    } else if (cleaned.length <= 5) {
+    } else if (cleaned.length <= 6) {
       return `${cleaned.slice(0, 3)} ${cleaned.slice(3)}`;
     } else {
-      return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 5)} ${cleaned.slice(
-        5
+      return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(
+        6
       )}`;
     }
   }
@@ -329,28 +329,29 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
           </Button>
         </div>
 
-        <!-- Input Field -->
-        <div class="w-full baseFlex">
-          <input
-            :value="manualInputValue"
-            @input="handleManualInput"
-            :inputmode="manualInputType === 'dpci' ? 'tel' : 'text'"
-            :placeholder="
-              manualInputType === 'dpci' ? 'XXX-XX-XXXX' : 'XXX XX XXX'
-            "
-            class="w-full text-center text-2xl tracking-widest p-4 rounded-lg border-2 border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors"
-          />
-        </div>
+        <div class="baseFlex gap-4">
+          <!-- Input Field -->
+          <div class="w-full baseFlex">
+            <input
+              :value="manualInputValue"
+              @input="handleManualInput"
+              :inputmode="manualInputType === 'dpci' ? 'tel' : 'text'"
+              :placeholder="
+                manualInputType === 'dpci' ? 'XXX-XX-XXXX' : 'XXX XXX XXX'
+              "
+              class="w-full text-center text-2xl tracking-widest p-4 rounded-lg border-2 border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors"
+            />
+          </div>
 
-        <!-- Generate Button -->
-        <Button
-          @click="generateManualBarcode"
-          :disabled="!isValidInput"
-          class="baseFlex gap-2 p-6 text-lg"
-        >
-          Generate Barcode
-          <v-icon name="bi-upc-scan" scale="1.2" />
-        </Button>
+          <!-- Generate Button -->
+          <Button
+            @click="generateManualBarcode"
+            :disabled="!isValidInput"
+            class="baseFlex h-16"
+          >
+            <v-icon name="bi-upc-scan" scale="1.4" />
+          </Button>
+        </div>
       </div>
     </div>
 
@@ -472,7 +473,7 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
         }
       "
     >
-      <DialogContent class="baseVertFlex w-5/6 min-h-[35vh] max-h-[90vh]">
+      <DialogContent class="baseVertFlex w-[90%] min-h-[35vh] max-h-[90vh]">
         <div class="baseVertFlex !justify-between min-h-[35vh] max-h-[90vh]">
           <div class="baseVertFlex gap-2">
             <DialogHeader>
