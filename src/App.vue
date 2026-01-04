@@ -134,6 +134,7 @@ async function generateManualBarcode() {
 
 function closeManualBarcodeDialog() {
   showManualBarcodeDialog.value = false;
+  manualInputValue.value = "";
 }
 
 const isPWA = ref(false);
