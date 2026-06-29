@@ -1,49 +1,58 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, nextTick } from "vue";
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from "vue";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/composables/useTheme";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import JsBarcode from "jsbarcode";
 
 const { theme, toggleTheme } = useTheme();
 
-const inputType = ref<"dpci" | "location">("dpci");
+type InputType = "dpci" | "location";
+type ViewMode = "create" | "recent";
+
+interface StoredBarcode {
+  id: string;
+  type: InputType;
+  data: string;
+  timestamp: string;
+  location?: string;
+}
+
+const STORAGE_KEY = "generated-barcodes";
+
+const inputType = ref<InputType>("dpci");
 const inputValue = ref("");
-const showManualBarcodeDialog = ref(false);
+const viewMode = ref<ViewMode>("create");
 const isPWA = ref(false);
+const inputRef = ref<HTMLInputElement | null>(null);
+const barcodes = ref<StoredBarcode[]>([]);
+const pendingLocation = ref<string | null>(null);
+
 let deferredPrompt: any = null;
 
 // Computed values for input
 const rawInputValue = computed(() => {
-  // Strip all non-alphanumeric characters for validation
   return inputValue.value.replace(/[-\s]/g, "").toUpperCase();
 });
 
 const isValidInput = computed(() => {
   if (inputType.value === "dpci") {
     return /^\d{9}$/.test(rawInputValue.value);
-  } else {
-    return rawInputValue.value.length === 9;
   }
+
+  return rawInputValue.value.length === 9;
+});
+
+const newestBarcode = computed(() => {
+  return barcodes.value[0] ?? null;
 });
 
 // Format input as user types
-function formatInput(value: string) {
-  // Remove all non-relevant characters
+function formatInput(value: string, type: InputType = inputType.value) {
   let cleaned = "";
 
-  if (inputType.value === "dpci") {
-    // For DPCI, only allow digits
+  if (type === "dpci") {
     cleaned = value.replace(/\D/g, "").slice(0, 9);
 
-    // Format as XXX-XX-XXXX
     if (cleaned.length <= 3) {
       return cleaned;
     } else if (cleaned.length <= 5) {
@@ -53,74 +62,55 @@ function formatInput(value: string) {
         5,
       )}`;
     }
-  } else {
-    // For Location, allow alphanumeric
-    cleaned = value
-      .replace(/[^a-zA-Z0-9]/g, "")
-      .toUpperCase()
-      .slice(0, 9);
+  }
 
-    // Format as XXX XXX XXX
-    if (cleaned.length <= 3) {
-      return cleaned;
-    } else if (cleaned.length <= 6) {
-      return `${cleaned.slice(0, 3)} ${cleaned.slice(3)}`;
-    } else {
-      return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(
-        6,
-      )}`;
-    }
+  cleaned = value
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase()
+    .slice(0, 9);
+
+  if (cleaned.length <= 3) {
+    return cleaned;
+  } else if (cleaned.length <= 6) {
+    return `${cleaned.slice(0, 3)} ${cleaned.slice(3)}`;
+  } else {
+    return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6)}`;
   }
 }
 
 function handleInput(event: Event) {
   const target = event.target as HTMLInputElement;
   const formatted = formatInput(target.value);
+
   inputValue.value = formatted;
-  // Update the input element directly to handle cursor position
   target.value = formatted;
 }
 
-// Clear input when switching input types
-watch(inputType, () => {
-  inputValue.value = "";
-});
+function saveBarcodes() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(barcodes.value));
+}
 
-onMounted(async () => {
-  isPWA.value = window.matchMedia("(display-mode: standalone)").matches;
+function loadBarcodes() {
+  const stored = localStorage.getItem(STORAGE_KEY);
 
-  window.addEventListener("beforeinstallprompt", (e) => {
-    // Prevent Chrome 67 and earlier from automatically showing the prompt
-    e.preventDefault();
-    // Stash the event so it can be triggered later.
-    deferredPrompt = e;
-  });
-});
+  if (!stored) return;
 
-async function generateManualBarcode() {
-  if (!isValidInput.value) return;
+  try {
+    const parsed = JSON.parse(stored) as StoredBarcode[];
 
-  showManualBarcodeDialog.value = true;
-  await nextTick();
-
-  const canvas = document.getElementById(
-    "manualBarcodeCanvas",
-  ) as HTMLCanvasElement;
-  if (canvas) {
-    generateBarcode(canvas, rawInputValue.value);
+    if (Array.isArray(parsed)) {
+      barcodes.value = parsed;
+    }
+  } catch {
+    barcodes.value = [];
   }
 }
 
-function closeManualBarcodeDialog() {
-  showManualBarcodeDialog.value = false;
-  inputValue.value = "";
-}
-
-function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
-  JsBarcode(canvas, barcodeText, {
+function generateBarcode(canvas: HTMLCanvasElement, barcode: StoredBarcode) {
+  JsBarcode(canvas, barcode.data, {
     format: "code39",
     displayValue: true,
-    text: formatInput(barcodeText),
+    text: formatInput(barcode.data, barcode.type),
     fontOptions: "bold",
     textMargin: 0,
     fontSize: 18,
@@ -130,26 +120,186 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
   });
 }
 
+async function renderNewestBarcode() {
+  await nextTick();
+
+  if (!newestBarcode.value) return;
+
+  const canvas = document.getElementById(
+    `barcode-${newestBarcode.value.id}`,
+  ) as HTMLCanvasElement | null;
+
+  if (canvas) {
+    generateBarcode(canvas, newestBarcode.value);
+  }
+}
+
+async function renderRecentBarcodes() {
+  await nextTick();
+
+  for (const barcode of barcodes.value) {
+    const canvas = document.getElementById(
+      `barcode-${barcode.id}`,
+    ) as HTMLCanvasElement | null;
+
+    if (canvas) {
+      generateBarcode(canvas, barcode);
+    }
+  }
+}
+
+async function generateManualBarcode() {
+  if (!isValidInput.value) return;
+
+  const type = inputType.value;
+  const data = rawInputValue.value;
+
+  const barcode: StoredBarcode = {
+    id: crypto.randomUUID(),
+    type,
+    data,
+    timestamp: new Date().toLocaleString(),
+  };
+
+  if (type === "dpci" && pendingLocation.value) {
+    barcode.location = pendingLocation.value;
+  }
+
+  barcodes.value = [barcode, ...barcodes.value];
+  saveBarcodes();
+
+  if (type === "location") {
+    pendingLocation.value = data;
+  } else {
+    pendingLocation.value = null;
+  }
+
+  inputValue.value = "";
+
+  await renderNewestBarcode();
+  inputRef.value?.focus();
+}
+
 function showInstallPrompt() {
   if (deferredPrompt) {
     deferredPrompt.prompt();
+
     deferredPrompt.userChoice.then((choiceResult: any) => {
       if (choiceResult.outcome === "accepted") {
         isPWA.value = true;
       }
+
       deferredPrompt = null;
     });
   }
 }
+
+function handleVisibilityChange() {
+  if (document.visibilityState === "visible") {
+    nextTick(() => {
+      inputRef.value?.focus();
+    });
+  }
+}
+
+// Clear input when switching input types
+watch(inputType, () => {
+  inputValue.value = "";
+
+  nextTick(() => {
+    inputRef.value?.focus();
+  });
+});
+
+watch(viewMode, async (mode) => {
+  await nextTick();
+
+  if (mode === "create") {
+    await renderNewestBarcode();
+    inputRef.value?.focus();
+  } else {
+    await renderRecentBarcodes();
+  }
+});
+
+onMounted(async () => {
+  loadBarcodes();
+
+  isPWA.value = window.matchMedia("(display-mode: standalone)").matches;
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+  });
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  await nextTick();
+
+  inputRef.value?.focus();
+  await renderNewestBarcode();
+});
+
+onUnmounted(() => {
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+});
 </script>
 
 <template>
   <div class="baseVertFlex relative h-dvh">
-    <div class="h-full w-full baseFlex">
+    <!-- Top Bar -->
+    <div
+      class="baseFlex absolute top-4 left-0 px-4 gap-4 w-full !justify-between"
+    >
+      <!-- Create / Recent Toggle -->
+      <div
+        :class="`baseFlex gap-2 rounded-lg p-1 ${
+          theme === 'light' ? 'bg-secondary/100' : 'bg-secondary/20'
+        }`"
+      >
+        <Button
+          :variant="viewMode === 'create' ? 'default' : 'ghost'"
+          @click="viewMode = 'create'"
+        >
+          Create
+        </Button>
+
+        <Button
+          :variant="viewMode === 'recent' ? 'default' : 'ghost'"
+          @click="viewMode = 'recent'"
+        >
+          Recent
+        </Button>
+      </div>
+
+      <div class="baseFlex gap-2">
+        <!-- Install trigger -->
+        <Button v-if="!isPWA" @click="showInstallPrompt" class="baseFlex gap-2">
+          Install app
+          <v-icon name="hi-solid-download" scale="1" />
+        </Button>
+
+        <!-- Theme Toggle -->
+        <Button
+          aria-label="Toggle light/dark theme"
+          size="icon"
+          @click="toggleTheme"
+          class="!p-2.5"
+        >
+          <v-icon v-if="theme === 'light'" name="bi-moon-stars" scale="1" />
+          <v-icon v-else name="bi-sun" scale="1" />
+        </Button>
+      </div>
+    </div>
+
+    <!-- Create View -->
+    <div v-if="viewMode === 'create'" class="h-full w-full baseFlex">
       <div class="baseVertFlex gap-6 w-full max-w-md px-4">
         <!-- DPCI / Location Toggle -->
         <div
-          :class="`baseFlex gap-2 rounded-lg p-1 ${theme === 'light' ? 'bg-secondary/100' : 'bg-secondary/20'}`"
+          :class="`baseFlex gap-2 rounded-lg p-1 ${
+            theme === 'light' ? 'bg-secondary/100' : 'bg-secondary/20'
+          }`"
         >
           <Button
             :variant="inputType === 'dpci' ? 'default' : 'ghost'"
@@ -168,10 +318,11 @@ function showInstallPrompt() {
           </Button>
         </div>
 
-        <div class="baseFlex gap-4">
+        <div class="baseFlex gap-4 w-full">
           <!-- Input Field -->
           <div class="w-full baseFlex">
             <input
+              ref="inputRef"
               :value="inputValue"
               @input="handleInput"
               :inputmode="inputType === 'dpci' ? 'tel' : 'text'"
@@ -191,75 +342,63 @@ function showInstallPrompt() {
             <v-icon name="bi-upc-scan" scale="1.5" />
           </Button>
         </div>
-      </div>
-    </div>
 
-    <!-- Top Bar -->
-    <div class="baseFlex absolute top-4 left-0 px-4 gap-4 w-full !justify-end">
-      <!-- Install trigger -->
-      <div class="baseFlex gap-2">
-        <Button v-if="!isPWA" @click="showInstallPrompt" class="baseFlex gap-2">
-          Install app
-          <v-icon name="hi-solid-download" scale="1" />
-        </Button>
-      </div>
-
-      <div class="baseFlex gap-2">
-        <!-- Theme Toggle -->
-        <Button
-          aria-label="Toggle light/dark theme"
-          size="icon"
-          @click="toggleTheme"
-          class="!p-2.5"
+        <!-- Newest Barcode -->
+        <div
+          v-if="newestBarcode"
+          class="baseVertFlex gap-2 w-full rounded-lg border border-border bg-background p-4"
         >
-          <v-icon v-if="theme === 'light'" name="bi-moon-stars" scale="1" />
-          <v-icon v-else name="bi-sun" scale="1" />
-        </Button>
+          <canvas
+            :id="`barcode-${newestBarcode.id}`"
+            width="250"
+            height="100"
+            class="rounded-md"
+          ></canvas>
+
+          <div class="w-full text-left text-sm text-muted-foreground">
+            <p>{{ newestBarcode.timestamp }}</p>
+
+            <p v-if="newestBarcode.location">
+              Location:
+              {{ formatInput(newestBarcode.location, "location") }}
+            </p>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Manual Barcode Dialog -->
-    <Dialog
-      v-model:open="showManualBarcodeDialog"
-      @update:open="
-        () => {
-          if (!showManualBarcodeDialog) {
-            closeManualBarcodeDialog();
-          }
-        }
-      "
-    >
-      <DialogContent class="baseVertFlex w-[90%] min-h-[35vh] max-h-[90vh]">
-        <div class="baseVertFlex !justify-between min-h-[35vh] max-h-[90vh]">
-          <div class="baseVertFlex gap-2">
-            <DialogHeader>
-              <DialogTitle>Generated Barcode</DialogTitle>
-            </DialogHeader>
-            <DialogDescription>
-              <p class="mt-2 mb-4">
-                {{ inputType === "dpci" ? "DPCI" : "Location" }}:
-                {{ inputValue }}
-              </p>
-            </DialogDescription>
-          </div>
+    <!-- Recent View -->
+    <div v-else class="h-full w-full overflow-y-auto pt-24 pb-6 px-4">
+      <div
+        v-if="barcodes.length"
+        class="baseVertFlex gap-4 w-full max-w-md mx-auto"
+      >
+        <div
+          v-for="barcode in barcodes"
+          :key="barcode.id"
+          class="baseVertFlex gap-2 w-full rounded-lg border border-border bg-background p-4"
+        >
+          <canvas
+            :id="`barcode-${barcode.id}`"
+            width="250"
+            height="100"
+            class="rounded-md"
+          ></canvas>
 
-          <div class="w-full h-full baseFlex">
-            <canvas
-              id="manualBarcodeCanvas"
-              width="250"
-              height="100"
-              class="rounded-md"
-            ></canvas>
-          </div>
+          <div class="w-full text-left text-sm text-muted-foreground">
+            <p>{{ barcode.timestamp }}</p>
 
-          <DialogFooter>
-            <Button class="flex gap-4 mt-4" @click="closeManualBarcodeDialog">
-              Done
-              <v-icon name="bi-check-lg" scale="1" />
-            </Button>
-          </DialogFooter>
+            <p v-if="barcode.location">
+              Location:
+              {{ formatInput(barcode.location, "location") }}
+            </p>
+          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+
+      <div v-else class="h-full w-full baseFlex text-muted-foreground">
+        No recent barcodes yet.
+      </div>
+    </div>
   </div>
 </template>
