@@ -360,7 +360,9 @@ onUnmounted(() => {
             class="rounded-md"
           ></canvas>
 
-          <div class="w-full text-left text-sm text-muted-foreground">
+          <div
+            class="baseFlex !justify-between w-full text-left text-sm text-muted-foreground"
+          >
             <p>{{ newestBarcode.timestamp }}</p>
 
             <p v-if="newestBarcode.location">
@@ -390,7 +392,9 @@ onUnmounted(() => {
             class="rounded-md"
           ></canvas>
 
-          <div class="w-full text-left sm:px-4 text-sm text-muted-foreground">
+          <div
+            class="baseFlex !justify-between w-full text-left sm:px-4 text-sm text-muted-foreground"
+          >
             <p>{{ barcode.timestamp }}</p>
 
             <p v-if="barcode.location">
