@@ -17,7 +17,7 @@ interface StoredBarcode {
   location?: string;
 }
 
-const STORAGE_KEY = "generated-barcodes";
+const STORAGE_KEY = "bcg-generated-barcodes";
 
 const inputType = ref<InputType>("dpci");
 const inputValue = ref("");
@@ -26,8 +26,6 @@ const isPWA = ref(false);
 const inputRef = ref<HTMLInputElement | null>(null);
 const barcodes = ref<StoredBarcode[]>([]);
 const pendingLocation = ref<string | null>(null);
-
-let deferredPrompt: any = null;
 
 // Computed values for input
 const rawInputValue = computed(() => {
@@ -185,20 +183,6 @@ async function generateManualBarcode() {
   inputRef.value?.focus();
 }
 
-function showInstallPrompt() {
-  if (deferredPrompt) {
-    deferredPrompt.prompt();
-
-    deferredPrompt.userChoice.then((choiceResult: any) => {
-      if (choiceResult.outcome === "accepted") {
-        isPWA.value = true;
-      }
-
-      deferredPrompt = null;
-    });
-  }
-}
-
 function handleVisibilityChange() {
   if (document.visibilityState === "visible") {
     nextTick(() => {
@@ -278,12 +262,6 @@ onUnmounted(() => {
       </div>
 
       <div class="baseFlex gap-2">
-        <!-- Install trigger -->
-        <Button v-if="!isPWA" @click="showInstallPrompt" class="baseFlex gap-2">
-          Install
-          <v-icon name="hi-solid-download" scale="1" />
-        </Button>
-
         <!-- Theme Toggle -->
         <Button
           aria-label="Toggle light/dark theme"

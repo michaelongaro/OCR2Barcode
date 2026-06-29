@@ -1,11 +1,11 @@
 import { ref, watchEffect } from "vue";
 
 export function useTheme() {
-  const theme = ref(localStorage.getItem("bcgTheme") || "light");
+  const theme = ref(localStorage.getItem("bcg-theme") || "light");
 
   watchEffect(() => {
     document.documentElement.setAttribute("data-theme", theme.value);
-    localStorage.setItem("bcgTheme", theme.value);
+    localStorage.setItem("bcg-theme", theme.value);
   });
 
   const toggleTheme = () => {

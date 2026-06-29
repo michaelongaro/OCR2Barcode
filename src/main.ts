@@ -1,7 +1,5 @@
 import { createApp } from "vue";
-import "@/style.css";
-import App from "@/App.vue";
-
+import { registerSW } from "virtual:pwa-register";
 import { OhVueIcon, addIcons } from "oh-vue-icons";
 import {
   BiSun,
@@ -15,8 +13,8 @@ import {
   IoSadSharp,
   HiSolidDownload,
 } from "oh-vue-icons/icons";
-
-import { registerSW } from "virtual:pwa-register";
+import App from "@/App.vue";
+import "@/style.css";
 
 const updateSW = registerSW({
   immediate: true,
