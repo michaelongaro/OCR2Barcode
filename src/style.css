@@ -84,8 +84,6 @@
   body {
     @apply bg-background text-foreground;
   }
-
-  /* look into smoothing out dark/light mode toggle transition later */
 }
 
 body {
