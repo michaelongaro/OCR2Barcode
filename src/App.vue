@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from "vue";
+import { ref, onMounted, computed, watch, nextTick } from "vue";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/composables/useTheme";
 import {
@@ -17,6 +17,8 @@ const { theme, toggleTheme } = useTheme();
 const inputType = ref<"dpci" | "location">("dpci");
 const manualInputValue = ref("");
 const showManualBarcodeDialog = ref(false);
+const isPWA = ref(false);
+let deferredPrompt: any = null;
 
 // Computed values for manual input
 const rawInputValue = computed(() => {
@@ -84,6 +86,17 @@ watch(inputType, () => {
   manualInputValue.value = "";
 });
 
+onMounted(async () => {
+  isPWA.value = window.matchMedia("(display-mode: standalone)").matches;
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    // Prevent Chrome 67 and earlier from automatically showing the prompt
+    e.preventDefault();
+    // Stash the event so it can be triggered later.
+    deferredPrompt = e;
+  });
+});
+
 async function generateManualBarcode() {
   if (!isValidInput.value) return;
 
@@ -115,6 +128,18 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
     height: 75,
     width: 1.5,
   });
+}
+
+function showInstallPrompt() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choiceResult: any) => {
+      if (choiceResult.outcome === "accepted") {
+        isPWA.value = true;
+      }
+      deferredPrompt = null;
+    });
+  }
 }
 </script>
 
@@ -169,10 +194,16 @@ function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
       </div>
     </div>
 
-    <!-- Top Bar with Controls -->
-    <div
-      class="baseFlex absolute top-4 left-0 px-4 w-full !justify-end sm:gap-4"
-    >
+    <!-- Top Bar -->
+    <div class="baseFlex absolute top-4 left-0 px-4 gap-4 w-full !justify-end">
+      <!-- Install trigger -->
+      <div class="baseFlex gap-2">
+        <Button v-if="!isPWA" @click="showInstallPrompt" class="baseFlex gap-2">
+          Install app
+          <v-icon name="hi-solid-download" scale="1" />
+        </Button>
+      </div>
+
       <div class="baseFlex gap-2">
         <!-- Theme Toggle -->
         <Button
