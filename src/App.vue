@@ -115,6 +115,8 @@ function generateBarcode(canvas: HTMLCanvasElement, barcode: StoredBarcode) {
     textMargin: 0,
     fontSize: 18,
     margin: 7,
+    marginLeft: 24,
+    marginRight: 24,
     height: 75,
     width: 1.5,
   });
@@ -158,7 +160,10 @@ async function generateManualBarcode() {
     id: crypto.randomUUID(),
     type,
     data,
-    timestamp: new Date().toLocaleString(),
+    timestamp: new Date().toLocaleString(undefined, {
+      dateStyle: "short",
+      timeStyle: "short",
+    }),
   };
 
   if (type === "dpci" && pendingLocation.value) {
@@ -275,7 +280,7 @@ onUnmounted(() => {
       <div class="baseFlex gap-2">
         <!-- Install trigger -->
         <Button v-if="!isPWA" @click="showInstallPrompt" class="baseFlex gap-2">
-          Install app
+          Install
           <v-icon name="hi-solid-download" scale="1" />
         </Button>
 
@@ -294,7 +299,7 @@ onUnmounted(() => {
 
     <!-- Create View -->
     <div v-if="viewMode === 'create'" class="h-full w-full baseFlex">
-      <div class="baseVertFlex gap-6 w-full max-w-md px-4">
+      <div class="baseVertFlex gap-6 w-full max-w-sm px-4">
         <!-- DPCI / Location Toggle -->
         <div
           :class="`baseFlex gap-2 rounded-lg p-1 ${
@@ -371,7 +376,7 @@ onUnmounted(() => {
     <div v-else class="h-full w-full overflow-y-auto pt-24 pb-6 px-4">
       <div
         v-if="barcodes.length"
-        class="baseVertFlex gap-4 w-full max-w-md mx-auto"
+        class="baseVertFlex gap-4 w-full max-w-sm mx-auto"
       >
         <div
           v-for="barcode in barcodes"
@@ -385,7 +390,7 @@ onUnmounted(() => {
             class="rounded-md"
           ></canvas>
 
-          <div class="w-full text-left text-sm text-muted-foreground">
+          <div class="w-full text-left sm:px-4 text-sm text-muted-foreground">
             <p>{{ barcode.timestamp }}</p>
 
             <p v-if="barcode.location">
