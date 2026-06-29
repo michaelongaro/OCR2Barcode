@@ -23,8 +23,10 @@ const inputType = ref<InputType>("dpci");
 const inputValue = ref("");
 const viewMode = ref<ViewMode>("create");
 const inputRef = ref<HTMLInputElement | null>(null);
+const inputKey = ref(0);
 const barcodes = ref<StoredBarcode[]>([]);
 const pendingLocation = ref<string | null>(null);
+const focusTimers: number[] = [];
 
 // Computed values for input
 const rawInputValue = computed(() => {
@@ -81,6 +83,65 @@ function handleInput(event: Event) {
 
   inputValue.value = formatted;
   target.value = formatted;
+}
+
+function clearFocusTimers() {
+  while (focusTimers.length) {
+    const timer = focusTimers.pop();
+
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+    }
+  }
+}
+
+function focusBarcodeInput(delay = 0) {
+  if (viewMode.value !== "create") return;
+
+  const timer = window.setTimeout(() => {
+    inputRef.value?.focus({ preventScroll: true });
+  }, delay);
+
+  focusTimers.push(timer);
+}
+
+function reopenBarcodeKeyboard(options: { remount?: boolean } = {}) {
+  if (viewMode.value !== "create") return;
+
+  clearFocusTimers();
+
+  inputRef.value?.blur();
+
+  if (options.remount) {
+    inputKey.value += 1;
+  }
+
+  nextTick(() => {
+    focusBarcodeInput(0);
+    focusBarcodeInput(100);
+    focusBarcodeInput(300);
+  });
+}
+
+function setInputType(type: InputType) {
+  if (inputType.value === type) {
+    reopenBarcodeKeyboard({ remount: true });
+    return;
+  }
+
+  inputType.value = type;
+}
+
+function handleRootPointerDown(event: PointerEvent) {
+  if (viewMode.value !== "create") return;
+
+  const target = event.target;
+
+  if (!(target instanceof HTMLElement)) return;
+
+  if (target.closest("button, input, canvas")) return;
+
+  focusBarcodeInput();
 }
 
 function saveBarcodes() {
@@ -179,24 +240,28 @@ async function generateManualBarcode() {
   inputValue.value = "";
 
   await renderNewestBarcode();
-  inputRef.value?.focus();
+  focusBarcodeInput();
 }
 
 function handleVisibilityChange() {
   if (document.visibilityState === "visible") {
-    nextTick(() => {
-      inputRef.value?.focus();
-    });
+    focusBarcodeInput();
   }
+}
+
+function handleWindowFocus() {
+  reopenBarcodeKeyboard();
+}
+
+function handlePageShow() {
+  reopenBarcodeKeyboard();
 }
 
 // Clear input when switching input types
 watch(inputType, () => {
   inputValue.value = "";
 
-  nextTick(() => {
-    inputRef.value?.focus();
-  });
+  reopenBarcodeKeyboard({ remount: true });
 });
 
 watch(viewMode, async (mode) => {
@@ -214,20 +279,28 @@ onMounted(async () => {
   loadBarcodes();
 
   document.addEventListener("visibilitychange", handleVisibilityChange);
+  window.addEventListener("focus", handleWindowFocus);
+  window.addEventListener("pageshow", handlePageShow);
 
   await nextTick();
 
-  inputRef.value?.focus();
+  focusBarcodeInput();
   await renderNewestBarcode();
 });
 
 onUnmounted(() => {
+  clearFocusTimers();
   document.removeEventListener("visibilitychange", handleVisibilityChange);
+  window.removeEventListener("focus", handleWindowFocus);
+  window.removeEventListener("pageshow", handlePageShow);
 });
 </script>
 
 <template>
-  <div class="baseVertFlex relative h-dvh">
+  <div
+    class="baseVertFlex relative h-dvh touch-manipulation"
+    @pointerdown="handleRootPointerDown"
+  >
     <!-- Top Bar -->
     <div
       class="baseFlex absolute top-4 left-0 px-4 gap-4 w-full !justify-between"
@@ -278,7 +351,7 @@ onUnmounted(() => {
         >
           <Button
             :variant="inputType === 'dpci' ? 'default' : 'ghost'"
-            @click="inputType = 'dpci'"
+            @click="setInputType('dpci')"
             class="flex-1"
           >
             DPCI
@@ -286,7 +359,7 @@ onUnmounted(() => {
 
           <Button
             :variant="inputType === 'location' ? 'default' : 'ghost'"
-            @click="inputType = 'location'"
+            @click="setInputType('location')"
             class="flex-1"
           >
             Location
@@ -297,10 +370,17 @@ onUnmounted(() => {
           <!-- Input Field -->
           <div class="w-full baseFlex">
             <input
+              :key="inputKey"
               ref="inputRef"
               :value="inputValue"
               @input="handleInput"
+              @keydown.enter.prevent="generateManualBarcode"
               :inputmode="inputType === 'dpci' ? 'tel' : 'text'"
+              enterkeyhint="done"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="characters"
+              :spellcheck="false"
               :placeholder="
                 inputType === 'dpci' ? 'XXX-XX-XXXX' : 'XXX XXX XXX'
               "
