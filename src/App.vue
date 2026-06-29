@@ -22,7 +22,6 @@ const STORAGE_KEY = "bcg-generated-barcodes";
 const inputType = ref<InputType>("dpci");
 const inputValue = ref("");
 const viewMode = ref<ViewMode>("create");
-const isPWA = ref(false);
 const inputRef = ref<HTMLInputElement | null>(null);
 const barcodes = ref<StoredBarcode[]>([]);
 const pendingLocation = ref<string | null>(null);
@@ -213,13 +212,6 @@ watch(viewMode, async (mode) => {
 
 onMounted(async () => {
   loadBarcodes();
-
-  isPWA.value = window.matchMedia("(display-mode: standalone)").matches;
-
-  window.addEventListener("beforeinstallprompt", (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-  });
 
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
