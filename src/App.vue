@@ -15,15 +15,15 @@ import JsBarcode from "jsbarcode";
 const { theme, toggleTheme } = useTheme();
 
 const inputType = ref<"dpci" | "location">("dpci");
-const manualInputValue = ref("");
+const inputValue = ref("");
 const showManualBarcodeDialog = ref(false);
 const isPWA = ref(false);
 let deferredPrompt: any = null;
 
-// Computed values for manual input
+// Computed values for input
 const rawInputValue = computed(() => {
   // Strip all non-alphanumeric characters for validation
-  return manualInputValue.value.replace(/[-\s]/g, "").toUpperCase();
+  return inputValue.value.replace(/[-\s]/g, "").toUpperCase();
 });
 
 const isValidInput = computed(() => {
@@ -73,17 +73,17 @@ function formatInput(value: string) {
   }
 }
 
-function handleManualInput(event: Event) {
+function handleInput(event: Event) {
   const target = event.target as HTMLInputElement;
   const formatted = formatInput(target.value);
-  manualInputValue.value = formatted;
+  inputValue.value = formatted;
   // Update the input element directly to handle cursor position
   target.value = formatted;
 }
 
 // Clear input when switching input types
 watch(inputType, () => {
-  manualInputValue.value = "";
+  inputValue.value = "";
 });
 
 onMounted(async () => {
@@ -113,7 +113,7 @@ async function generateManualBarcode() {
 
 function closeManualBarcodeDialog() {
   showManualBarcodeDialog.value = false;
-  manualInputValue.value = "";
+  inputValue.value = "";
 }
 
 function generateBarcode(canvas: HTMLCanvasElement, barcodeText: string) {
@@ -172,8 +172,8 @@ function showInstallPrompt() {
           <!-- Input Field -->
           <div class="w-full baseFlex">
             <input
-              :value="manualInputValue"
-              @input="handleManualInput"
+              :value="inputValue"
+              @input="handleInput"
               :inputmode="inputType === 'dpci' ? 'tel' : 'text'"
               :placeholder="
                 inputType === 'dpci' ? 'XXX-XX-XXXX' : 'XXX XXX XXX'
@@ -238,7 +238,7 @@ function showInstallPrompt() {
             <DialogDescription>
               <p class="mt-2 mb-4">
                 {{ inputType === "dpci" ? "DPCI" : "Location" }}:
-                {{ manualInputValue }}
+                {{ inputValue }}
               </p>
             </DialogDescription>
           </div>
