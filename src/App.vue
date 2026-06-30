@@ -389,7 +389,7 @@ onUnmounted(() => {
             :disabled="!isValidInput"
             class="baseFlex h-16"
           >
-            <v-icon name="bi-upc-scan" scale="1.5" />
+            <v-icon name="ri-barcode-fill" scale="1.5" />
           </Button>
         </div>
 

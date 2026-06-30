@@ -5,9 +5,9 @@ import {
   BiSun,
   BiMoonStars,
   BiKeyboard,
-  BiUpcScan,
   HiPlus,
   MdReplayRound,
+  RiBarcodeFill,
 } from "oh-vue-icons/icons";
 import App from "@/App.vue";
 import "@/style.css";
@@ -35,7 +35,7 @@ const updateSW = registerSW({
   },
 });
 
-addIcons(BiSun, BiMoonStars, BiKeyboard, BiUpcScan, HiPlus, MdReplayRound);
+addIcons(BiSun, BiMoonStars, BiKeyboard, HiPlus, MdReplayRound, RiBarcodeFill);
 
 const app = createApp(App);
 
