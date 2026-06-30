@@ -132,18 +132,6 @@ function setInputType(type: InputType) {
   inputType.value = type;
 }
 
-function handleRootPointerDown(event: PointerEvent) {
-  if (viewMode.value !== "create") return;
-
-  const target = event.target;
-
-  if (!(target instanceof HTMLElement)) return;
-
-  if (target.closest("button, input, canvas")) return;
-
-  focusBarcodeInput();
-}
-
 function saveBarcodes() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(barcodes.value));
 }
@@ -164,7 +152,10 @@ function loadBarcodes() {
   }
 }
 
-function generateBarcode(canvas: HTMLCanvasElement, barcode: StoredBarcode) {
+function generateCanvasBarcode(
+  canvas: HTMLCanvasElement,
+  barcode: StoredBarcode,
+) {
   JsBarcode(canvas, barcode.data, {
     format: "code39",
     displayValue: true,
@@ -190,7 +181,7 @@ async function renderNewestBarcode() {
   ) as HTMLCanvasElement | null;
 
   if (canvas) {
-    generateBarcode(canvas, newestBarcode.value);
+    generateCanvasBarcode(canvas, newestBarcode.value);
   }
 }
 
@@ -203,12 +194,12 @@ async function renderRecentBarcodes() {
     ) as HTMLCanvasElement | null;
 
     if (canvas) {
-      generateBarcode(canvas, barcode);
+      generateCanvasBarcode(canvas, barcode);
     }
   }
 }
 
-async function generateManualBarcode() {
+async function generateBarcode() {
   if (!isValidInput.value) return;
 
   const type = inputType.value;
@@ -240,7 +231,6 @@ async function generateManualBarcode() {
   inputValue.value = "";
 
   await renderNewestBarcode();
-  focusBarcodeInput();
 }
 
 function handleVisibilityChange() {
@@ -297,10 +287,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
-    class="baseVertFlex relative h-dvh touch-manipulation"
-    @pointerdown="handleRootPointerDown"
-  >
+  <div class="baseVertFlex relative h-svh touch-manipulation">
     <!-- Top Bar -->
     <div
       class="baseFlex absolute top-4 left-0 px-4 gap-4 w-full !justify-between"
@@ -374,7 +361,7 @@ onUnmounted(() => {
               ref="inputRef"
               :value="inputValue"
               @input="handleInput"
-              @keydown.enter.prevent="generateManualBarcode"
+              @keydown.enter.prevent="generateBarcode"
               :inputmode="inputType === 'dpci' ? 'tel' : 'text'"
               enterkeyhint="done"
               autocomplete="off"
@@ -390,7 +377,7 @@ onUnmounted(() => {
 
           <!-- Generate Button -->
           <Button
-            @click="generateManualBarcode"
+            @click="generateBarcode"
             :disabled="!isValidInput"
             class="baseFlex h-16"
           >
