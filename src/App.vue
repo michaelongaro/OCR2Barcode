@@ -421,7 +421,7 @@ onUnmounted(() => {
     <!-- Create View -->
     <div
       v-if="viewMode === 'create'"
-      class="min-h-0 flex-1 w-full overflow-hidden baseFlex"
+      class="min-h-0 flex-1 w-full overflow-hidden baseFlex pb-32"
     >
       <div class="baseVertFlex gap-6 w-full max-w-sm px-4">
         <!-- DPCI / Location Toggle -->
