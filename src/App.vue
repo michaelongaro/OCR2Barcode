@@ -124,11 +124,6 @@ function reopenBarcodeKeyboard(options: { remount?: boolean } = {}) {
 }
 
 function setInputType(type: InputType) {
-  if (inputType.value === type) {
-    reopenBarcodeKeyboard({ remount: true });
-    return;
-  }
-
   inputType.value = type;
 }
 
@@ -259,7 +254,6 @@ watch(viewMode, async (mode) => {
 
   if (mode === "create") {
     await renderNewestBarcode();
-    inputRef.value?.focus();
   } else {
     await renderRecentBarcodes();
   }
