@@ -302,20 +302,28 @@ onUnmounted(() => {
           :variant="viewMode === 'create' ? 'default' : 'ghost'"
           @click="viewMode = 'create'"
         >
-          Create
+          <div class="baseFlex gap-2">
+            <v-icon name="hi-plus" scale="0.75" />
+            Create
+          </div>
         </Button>
 
         <Button
           :variant="viewMode === 'recent' ? 'default' : 'ghost'"
           @click="viewMode = 'recent'"
         >
-          Recent
+          <div class="baseFlex gap-2">
+            <v-icon name="md-replay-round" scale="0.75" />
+
+            Recent
+          </div>
         </Button>
       </div>
 
       <div class="baseFlex gap-2">
         <!-- Theme Toggle -->
         <Button
+          variant="link"
           aria-label="Toggle light/dark theme"
           size="icon"
           @click="toggleTheme"

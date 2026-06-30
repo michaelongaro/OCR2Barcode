@@ -4,14 +4,10 @@ import { OhVueIcon, addIcons } from "oh-vue-icons";
 import {
   BiSun,
   BiMoonStars,
-  BiCamera,
   BiKeyboard,
   BiUpcScan,
-  BiCheckLg,
-  MdEditnoteRound,
-  MdDeleteforeverRound,
-  IoSadSharp,
-  HiSolidDownload,
+  HiPlus,
+  MdReplayRound,
 } from "oh-vue-icons/icons";
 import App from "@/App.vue";
 import "@/style.css";
@@ -39,18 +35,7 @@ const updateSW = registerSW({
   },
 });
 
-addIcons(
-  BiSun,
-  BiMoonStars,
-  BiCamera,
-  BiKeyboard,
-  BiUpcScan,
-  BiCheckLg,
-  MdEditnoteRound,
-  MdDeleteforeverRound,
-  IoSadSharp,
-  HiSolidDownload,
-);
+addIcons(BiSun, BiMoonStars, BiKeyboard, BiUpcScan, HiPlus, MdReplayRound);
 
 const app = createApp(App);
 
