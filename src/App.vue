@@ -28,6 +28,23 @@ const barcodes = ref<StoredBarcode[]>([]);
 const pendingLocation = ref<string | null>(null);
 const focusTimers: number[] = [];
 
+let lockedScrollY = 0;
+let previousHtmlStyles: {
+  height: string;
+  overflow: string;
+  overscrollBehavior: string;
+} | null = null;
+let previousBodyStyles: {
+  height: string;
+  left: string;
+  overflow: string;
+  overscrollBehavior: string;
+  position: string;
+  right: string;
+  top: string;
+  width: string;
+} | null = null;
+
 // Computed values for input
 const rawInputValue = computed(() => {
   return inputValue.value.replace(/[-\s]/g, "").toUpperCase();
@@ -259,7 +276,74 @@ watch(viewMode, async (mode) => {
   }
 });
 
+function lockBodyScroll() {
+  if (previousHtmlStyles || previousBodyStyles) return;
+
+  const html = document.documentElement;
+  const body = document.body;
+
+  lockedScrollY = window.scrollY;
+
+  previousHtmlStyles = {
+    height: html.style.height,
+    overflow: html.style.overflow,
+    overscrollBehavior: html.style.overscrollBehavior,
+  };
+
+  previousBodyStyles = {
+    height: body.style.height,
+    left: body.style.left,
+    overflow: body.style.overflow,
+    overscrollBehavior: body.style.overscrollBehavior,
+    position: body.style.position,
+    right: body.style.right,
+    top: body.style.top,
+    width: body.style.width,
+  };
+
+  html.style.height = "100%";
+  html.style.overflow = "hidden";
+  html.style.overscrollBehavior = "none";
+
+  body.style.position = "fixed";
+  body.style.top = `-${lockedScrollY}px`;
+  body.style.left = "0";
+  body.style.right = "0";
+  body.style.width = "100%";
+  body.style.height = "100%";
+  body.style.overflow = "hidden";
+  body.style.overscrollBehavior = "none";
+}
+
+function unlockBodyScroll() {
+  const html = document.documentElement;
+  const body = document.body;
+
+  if (previousHtmlStyles) {
+    html.style.height = previousHtmlStyles.height;
+    html.style.overflow = previousHtmlStyles.overflow;
+    html.style.overscrollBehavior = previousHtmlStyles.overscrollBehavior;
+  }
+
+  if (previousBodyStyles) {
+    body.style.position = previousBodyStyles.position;
+    body.style.top = previousBodyStyles.top;
+    body.style.left = previousBodyStyles.left;
+    body.style.right = previousBodyStyles.right;
+    body.style.width = previousBodyStyles.width;
+    body.style.height = previousBodyStyles.height;
+    body.style.overflow = previousBodyStyles.overflow;
+    body.style.overscrollBehavior = previousBodyStyles.overscrollBehavior;
+  }
+
+  previousHtmlStyles = null;
+  previousBodyStyles = null;
+
+  window.scrollTo(0, lockedScrollY);
+}
+
 onMounted(async () => {
+  lockBodyScroll();
   loadBarcodes();
 
   document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -274,6 +358,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   clearFocusTimers();
+  unlockBodyScroll();
   document.removeEventListener("visibilitychange", handleVisibilityChange);
   window.removeEventListener("focus", handleWindowFocus);
   window.removeEventListener("pageshow", handlePageShow);
@@ -281,56 +366,63 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="baseVertFlex relative h-svh touch-manipulation">
-    <!-- Top Bar -->
-    <div
-      class="baseFlex absolute top-4 left-0 px-4 gap-4 w-full !justify-between"
+  <div
+    class="baseVertFlex h-svh w-full overflow-hidden overscroll-none touch-manipulation bg-background text-foreground"
+  >
+    <!-- Header -->
+    <header
+      class="relative z-10 w-full shrink-0 bg-background px-2 pb-2 pt-[calc(env(safe-area-inset-top)+0.5rem)]"
     >
-      <!-- Create / Recent Toggle -->
-      <div
-        :class="`baseFlex gap-2 rounded-lg p-1 ${
-          theme === 'light' ? 'bg-secondary/100' : 'bg-secondary/20'
-        }`"
-      >
-        <Button
-          :variant="viewMode === 'create' ? 'default' : 'ghost'"
-          @click="viewMode = 'create'"
+      <div class="baseFlex gap-4 w-full !justify-between">
+        <!-- Create / Recent Toggle -->
+        <div
+          :class="`baseFlex gap-2 rounded-lg p-1 ${
+            theme === 'light' ? 'bg-secondary/100' : 'bg-secondary/20'
+          }`"
         >
-          <div class="baseFlex gap-2">
-            <v-icon name="hi-plus" scale="0.75" />
-            Create
-          </div>
-        </Button>
+          <Button
+            :variant="viewMode === 'create' ? 'default' : 'ghost'"
+            @click="viewMode = 'create'"
+          >
+            <div class="baseFlex gap-2">
+              <v-icon name="hi-plus" scale="0.75" />
+              Create
+            </div>
+          </Button>
 
-        <Button
-          :variant="viewMode === 'recent' ? 'default' : 'ghost'"
-          @click="viewMode = 'recent'"
-        >
-          <div class="baseFlex gap-2">
-            <v-icon name="md-replay-round" scale="0.75" />
+          <Button
+            :variant="viewMode === 'recent' ? 'default' : 'ghost'"
+            @click="viewMode = 'recent'"
+          >
+            <div class="baseFlex gap-2">
+              <v-icon name="md-replay-round" scale="0.75" />
 
-            Recent
-          </div>
-        </Button>
+              Recent
+            </div>
+          </Button>
+        </div>
+
+        <div class="baseFlex gap-2">
+          <!-- Theme Toggle -->
+          <Button
+            variant="link"
+            aria-label="Toggle light/dark theme"
+            size="icon"
+            @click="toggleTheme"
+            class="!p-2.5"
+          >
+            <v-icon v-if="theme === 'light'" name="bi-moon-stars" scale="1" />
+            <v-icon v-else name="bi-sun" scale="1" />
+          </Button>
+        </div>
       </div>
-
-      <div class="baseFlex gap-2">
-        <!-- Theme Toggle -->
-        <Button
-          variant="link"
-          aria-label="Toggle light/dark theme"
-          size="icon"
-          @click="toggleTheme"
-          class="!p-2.5"
-        >
-          <v-icon v-if="theme === 'light'" name="bi-moon-stars" scale="1" />
-          <v-icon v-else name="bi-sun" scale="1" />
-        </Button>
-      </div>
-    </div>
+    </header>
 
     <!-- Create View -->
-    <div v-if="viewMode === 'create'" class="h-full w-full baseFlex">
+    <div
+      v-if="viewMode === 'create'"
+      class="min-h-0 flex-1 w-full overflow-hidden baseFlex"
+    >
       <div class="baseVertFlex gap-6 w-full max-w-sm px-4">
         <!-- DPCI / Location Toggle -->
         <div
@@ -410,42 +502,48 @@ onUnmounted(() => {
             </p>
           </div>
         </div>
+        <!-- Filler space to prevent layout shift -->
+        <div v-else class="h-[169px] w-full baseFlex"></div>
       </div>
     </div>
 
     <!-- Recent View -->
-    <div v-else class="h-full w-full overflow-y-auto pt-24 pb-6 px-4">
+    <div v-else class="min-h-0 flex-1 w-full overflow-hidden px-4 py-1">
       <div
-        v-if="barcodes.length"
-        class="baseVertFlex gap-4 w-full max-w-sm mx-auto"
+        class="recent-scroll h-full w-full overflow-y-auto overscroll-contain"
       >
         <div
-          v-for="barcode in barcodes"
-          :key="barcode.id"
-          class="baseVertFlex gap-2 w-full rounded-lg border border-border bg-background p-4"
+          v-if="barcodes.length"
+          class="baseVertFlex gap-4 w-full max-w-sm mx-auto"
         >
-          <canvas
-            :id="`barcode-${barcode.id}`"
-            width="250"
-            height="100"
-            class="rounded-md"
-          ></canvas>
-
           <div
-            class="baseFlex !justify-between w-full text-left sm:px-4 text-sm text-muted-foreground"
+            v-for="barcode in barcodes"
+            :key="barcode.id"
+            class="baseVertFlex gap-2 w-full rounded-lg border border-border bg-background p-4"
           >
-            <p>{{ barcode.timestamp }}</p>
+            <canvas
+              :id="`barcode-${barcode.id}`"
+              width="250"
+              height="100"
+              class="rounded-md"
+            ></canvas>
 
-            <p v-if="barcode.location">
-              Location:
-              {{ formatInput(barcode.location, "location") }}
-            </p>
+            <div
+              class="baseFlex !justify-between w-full text-left sm:px-4 text-sm text-muted-foreground"
+            >
+              <p>{{ barcode.timestamp }}</p>
+
+              <p v-if="barcode.location">
+                Location:
+                {{ formatInput(barcode.location, "location") }}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div v-else class="h-full w-full baseFlex text-muted-foreground">
-        No recent barcodes yet.
+        <div v-else class="h-full w-full baseFlex text-muted-foreground">
+          No recent barcodes yet.
+        </div>
       </div>
     </div>
   </div>
