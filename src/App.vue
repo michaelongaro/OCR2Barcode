@@ -1,23 +1,22 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch, nextTick } from "vue";
-import { Button } from "@/components/ui/button";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { useBarcodeInputFocus } from "@/components/composables/useBarcodeInputFocus";
+import { useBodyScrollLock } from "@/components/composables/useBodyScrollLock";
+import { useCustomKeyboard } from "@/components/composables/useCustomKeyboard";
 import { useTheme } from "@/components/composables/useTheme";
-import JsBarcode from "jsbarcode";
-
-const { theme, toggleTheme } = useTheme();
-
-type InputType = "dpci" | "location";
-type ViewMode = "create" | "recent";
-
-interface StoredBarcode {
-  id: string;
-  type: InputType;
-  data: string;
-  timestamp: string;
-  location?: string;
-}
-
-const STORAGE_KEY = "bcg-generated-barcodes";
+import { Button } from "@/components/ui/button";
+import {
+  createStoredBarcode,
+  formatInput,
+  getRawInputValue,
+  isValidInputValue,
+  loadStoredBarcodes,
+  renderBarcodeToCanvas,
+  saveStoredBarcodes,
+  type InputType,
+  type StoredBarcode,
+  type ViewMode,
+} from "@/lib/barcodes";
 
 const inputType = ref<InputType>("dpci");
 const inputValue = ref("");
@@ -26,297 +25,44 @@ const inputRef = ref<HTMLInputElement | null>(null);
 const inputKey = ref(0);
 const barcodes = ref<StoredBarcode[]>([]);
 const pendingLocation = ref<string | null>(null);
-const focusTimers: number[] = [];
 
-type CustomKeyboardMode = "letters" | "numbers";
+const { theme, toggleTheme } = useTheme();
 
-const isTouchOnly = ref(false);
-const isCustomKeyboardOpen = ref(false);
-const customKeyboardMode = ref<CustomKeyboardMode>("letters");
+const { lockBodyScroll, unlockBodyScroll } = useBodyScrollLock();
 
-let touchOnlyMediaQuery: MediaQueryList | null = null;
+const {
+  activeKeyboardRows,
+  cleanupTouchOnlyDetection,
+  closeCustomKeyboard,
+  handleInputClick,
+  handleInputFocus,
+  handleInputPointerDown,
+  keyboardVisible,
+  pressCustomKey,
+  resetCustomKeyboardMode,
+  setupTouchOnlyDetection,
+  shouldUseCustomKeyboard,
+} = useCustomKeyboard(inputType, viewMode, inputValue);
 
-const shouldUseCustomKeyboard = computed(() => isTouchOnly.value);
+const { clearFocusTimers, focusBarcodeInput, reopenBarcodeKeyboard } =
+  useBarcodeInputFocus(viewMode, shouldUseCustomKeyboard, inputRef, inputKey);
 
-const keyboardVisible = computed(() => {
-  return (
-    shouldUseCustomKeyboard.value &&
-    isCustomKeyboardOpen.value &&
-    viewMode.value === "create"
-  );
-});
-
-const dpciKeyboardRows = [
-  ["1", "2", "3"],
-  ["4", "5", "6"],
-  ["7", "8", "9"],
-  ["", "0", "⌫"],
-];
-
-const locationLetterRows = [
-  ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
-  ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
-  ["123", "Z", "X", "C", "V", "B", "N", "M", "⌫"],
-];
-
-const locationNumberRows = [
-  ["1", "2", "3"],
-  ["4", "5", "6"],
-  ["7", "8", "9"],
-  ["ABC", "0", "⌫"],
-];
-
-const activeKeyboardRows = computed(() => {
-  if (inputType.value === "dpci") {
-    return dpciKeyboardRows;
-  }
-
-  return customKeyboardMode.value === "letters"
-    ? locationLetterRows
-    : locationNumberRows;
-});
-
-let lockedScrollY = 0;
-let previousHtmlStyles: {
-  height: string;
-  overflow: string;
-  overscrollBehavior: string;
-} | null = null;
-let previousBodyStyles: {
-  height: string;
-  left: string;
-  overflow: string;
-  overscrollBehavior: string;
-  position: string;
-  right: string;
-  top: string;
-  width: string;
-} | null = null;
-
-function lockBodyScroll() {
-  if (previousHtmlStyles || previousBodyStyles) return;
-
-  const html = document.documentElement;
-  const body = document.body;
-
-  lockedScrollY = window.scrollY;
-
-  previousHtmlStyles = {
-    height: html.style.height,
-    overflow: html.style.overflow,
-    overscrollBehavior: html.style.overscrollBehavior,
-  };
-
-  previousBodyStyles = {
-    height: body.style.height,
-    left: body.style.left,
-    overflow: body.style.overflow,
-    overscrollBehavior: body.style.overscrollBehavior,
-    position: body.style.position,
-    right: body.style.right,
-    top: body.style.top,
-    width: body.style.width,
-  };
-
-  html.style.height = "100%";
-  html.style.overflow = "hidden";
-  html.style.overscrollBehavior = "none";
-
-  body.style.position = "fixed";
-  body.style.top = `-${lockedScrollY}px`;
-  body.style.left = "0";
-  body.style.right = "0";
-  body.style.width = "100%";
-  body.style.height = "100%";
-  body.style.overflow = "hidden";
-  body.style.overscrollBehavior = "none";
-}
-
-function unlockBodyScroll() {
-  const html = document.documentElement;
-  const body = document.body;
-
-  if (previousHtmlStyles) {
-    html.style.height = previousHtmlStyles.height;
-    html.style.overflow = previousHtmlStyles.overflow;
-    html.style.overscrollBehavior = previousHtmlStyles.overscrollBehavior;
-  }
-
-  if (previousBodyStyles) {
-    body.style.position = previousBodyStyles.position;
-    body.style.top = previousBodyStyles.top;
-    body.style.left = previousBodyStyles.left;
-    body.style.right = previousBodyStyles.right;
-    body.style.width = previousBodyStyles.width;
-    body.style.height = previousBodyStyles.height;
-    body.style.overflow = previousBodyStyles.overflow;
-    body.style.overscrollBehavior = previousBodyStyles.overscrollBehavior;
-  }
-
-  previousHtmlStyles = null;
-  previousBodyStyles = null;
-
-  window.scrollTo(0, lockedScrollY);
-}
-
-function updateTouchOnlyStatus(event?: MediaQueryListEvent) {
-  isTouchOnly.value = event?.matches ?? touchOnlyMediaQuery?.matches ?? false;
-
-  if (!isTouchOnly.value) {
-    isCustomKeyboardOpen.value = false;
-  }
-}
-
-function openCustomKeyboard() {
-  if (!shouldUseCustomKeyboard.value || viewMode.value !== "create") return;
-
-  isCustomKeyboardOpen.value = true;
-}
-
-function closeCustomKeyboard() {
-  isCustomKeyboardOpen.value = false;
-}
-
-function handleInputPointerDown(event: PointerEvent) {
-  if (!shouldUseCustomKeyboard.value) return;
-
-  event.preventDefault();
-  openCustomKeyboard();
-}
-
-function handleInputClick(event: MouseEvent) {
-  if (!shouldUseCustomKeyboard.value) return;
-
-  event.preventDefault();
-  openCustomKeyboard();
-}
-
-function handleInputFocus(event: FocusEvent) {
-  if (!shouldUseCustomKeyboard.value) return;
-
-  openCustomKeyboard();
-
-  const target = event.target as HTMLInputElement | null;
-  target?.blur();
-}
-
-async function pressCustomKey(key: string) {
-  if (key === "ABC") {
-    customKeyboardMode.value = "letters";
-    return;
-  }
-
-  if (key === "123") {
-    customKeyboardMode.value = "numbers";
-    return;
-  }
-
-  if (key === "⌫") {
-    inputValue.value = formatInput(rawInputValue.value.slice(0, -1));
-    return;
-  }
-
-  const isAllowedKey =
-    inputType.value === "dpci" ? /^\d$/.test(key) : /^[A-Z0-9]$/.test(key);
-
-  if (!isAllowedKey) return;
-
-  inputValue.value = formatInput(`${rawInputValue.value}${key}`);
-}
-
-// Computed values for input
-const rawInputValue = computed(() => {
-  return inputValue.value.replace(/[-\s]/g, "").toUpperCase();
-});
+const rawInputValue = computed(() => getRawInputValue(inputValue.value));
 
 const isValidInput = computed(() => {
-  if (inputType.value === "dpci") {
-    return /^\d{9}$/.test(rawInputValue.value);
-  }
-
-  return rawInputValue.value.length === 9;
+  return isValidInputValue(inputValue.value, inputType.value);
 });
 
 const newestBarcode = computed(() => {
   return barcodes.value[0] ?? null;
 });
 
-// Format input as user types
-function formatInput(value: string, type: InputType = inputType.value) {
-  let cleaned = "";
-
-  if (type === "dpci") {
-    cleaned = value.replace(/\D/g, "").slice(0, 9);
-
-    if (cleaned.length <= 3) {
-      return cleaned;
-    } else if (cleaned.length <= 5) {
-      return `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
-    } else {
-      return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 5)}-${cleaned.slice(
-        5,
-      )}`;
-    }
-  }
-
-  cleaned = value
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .toUpperCase()
-    .slice(0, 9);
-
-  if (cleaned.length <= 3) {
-    return cleaned;
-  } else if (cleaned.length <= 6) {
-    return `${cleaned.slice(0, 3)} ${cleaned.slice(3)}`;
-  } else {
-    return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6)}`;
-  }
-}
-
 function handleInput(event: Event) {
   const target = event.target as HTMLInputElement;
-  const formatted = formatInput(target.value);
+  const formatted = formatInput(target.value, inputType.value);
 
   inputValue.value = formatted;
   target.value = formatted;
-}
-
-function clearFocusTimers() {
-  while (focusTimers.length) {
-    const timer = focusTimers.pop();
-
-    if (timer !== undefined) {
-      window.clearTimeout(timer);
-    }
-  }
-}
-
-function focusBarcodeInput(delay = 0) {
-  if (viewMode.value !== "create" || shouldUseCustomKeyboard.value) return;
-
-  const timer = window.setTimeout(() => {
-    inputRef.value?.focus({ preventScroll: true });
-  }, delay);
-
-  focusTimers.push(timer);
-}
-
-function reopenBarcodeKeyboard(options: { remount?: boolean } = {}) {
-  if (viewMode.value !== "create" || shouldUseCustomKeyboard.value) return;
-
-  clearFocusTimers();
-
-  inputRef.value?.blur();
-
-  if (options.remount) {
-    inputKey.value += 1;
-  }
-
-  nextTick(() => {
-    focusBarcodeInput(0);
-    focusBarcodeInput(100);
-    focusBarcodeInput(300);
-  });
 }
 
 function setInputType(type: InputType) {
@@ -324,42 +70,18 @@ function setInputType(type: InputType) {
 }
 
 function saveBarcodes() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(barcodes.value));
+  saveStoredBarcodes(barcodes.value);
 }
 
 function loadBarcodes() {
-  const stored = localStorage.getItem(STORAGE_KEY);
-
-  if (!stored) return;
-
-  try {
-    const parsed = JSON.parse(stored) as StoredBarcode[];
-
-    if (Array.isArray(parsed)) {
-      barcodes.value = parsed;
-    }
-  } catch {
-    barcodes.value = [];
-  }
+  barcodes.value = loadStoredBarcodes();
 }
 
 function generateCanvasBarcode(
   canvas: HTMLCanvasElement,
   barcode: StoredBarcode,
 ) {
-  JsBarcode(canvas, barcode.data, {
-    format: "code39",
-    displayValue: true,
-    text: formatInput(barcode.data, barcode.type),
-    fontOptions: "bold",
-    textMargin: 0,
-    fontSize: 18,
-    margin: 7,
-    marginLeft: 24,
-    marginRight: 24,
-    height: 75,
-    width: 1.5,
-  });
+  renderBarcodeToCanvas(canvas, barcode);
 }
 
 function handleMainBackgroundClick(event: MouseEvent) {
@@ -406,19 +128,7 @@ async function generateBarcode() {
   const type = inputType.value;
   const data = rawInputValue.value;
 
-  const barcode: StoredBarcode = {
-    id: crypto.randomUUID(),
-    type,
-    data,
-    timestamp: new Date().toLocaleString(undefined, {
-      dateStyle: "short",
-      timeStyle: "short",
-    }),
-  };
-
-  if (type === "dpci" && pendingLocation.value) {
-    barcode.location = pendingLocation.value;
-  }
+  const barcode = createStoredBarcode(type, data, pendingLocation.value);
 
   barcodes.value = [barcode, ...barcodes.value];
   saveBarcodes();
@@ -450,7 +160,7 @@ function handlePageShow() {
 
 watch(inputType, () => {
   inputValue.value = "";
-  customKeyboardMode.value = "letters";
+  resetCustomKeyboardMode();
 
   reopenBarcodeKeyboard({ remount: true });
 });
@@ -469,17 +179,7 @@ watch(viewMode, async (mode) => {
 onMounted(async () => {
   lockBodyScroll();
   loadBarcodes();
-
-  touchOnlyMediaQuery = window.matchMedia(
-    "(hover: none) and (pointer: coarse)",
-  );
-  updateTouchOnlyStatus();
-
-  if (touchOnlyMediaQuery.addEventListener) {
-    touchOnlyMediaQuery.addEventListener("change", updateTouchOnlyStatus);
-  } else {
-    touchOnlyMediaQuery.addListener(updateTouchOnlyStatus);
-  }
+  setupTouchOnlyDetection();
 
   document.addEventListener("visibilitychange", handleVisibilityChange);
   window.addEventListener("focus", handleWindowFocus);
@@ -494,14 +194,7 @@ onMounted(async () => {
 onUnmounted(() => {
   clearFocusTimers();
   unlockBodyScroll();
-
-  if (touchOnlyMediaQuery) {
-    if (touchOnlyMediaQuery.removeEventListener) {
-      touchOnlyMediaQuery.removeEventListener("change", updateTouchOnlyStatus);
-    } else {
-      touchOnlyMediaQuery.removeListener(updateTouchOnlyStatus);
-    }
-  }
+  cleanupTouchOnlyDetection();
 
   document.removeEventListener("visibilitychange", handleVisibilityChange);
   window.removeEventListener("focus", handleWindowFocus);
