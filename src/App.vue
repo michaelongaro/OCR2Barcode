@@ -422,6 +422,7 @@ onUnmounted(() => {
                 :class="[
                   'h-12 rounded-lg border border-border bg-secondary text-lg font-semibold text-foreground transition active:scale-95 active:bg-primary active:text-primary-foreground flex-1',
                   key === '123' || key === 'ABC' ? 'text-sm' : '',
+                  key === '' ? 'opacity-0 pointer-events-none' : '',
                 ]"
                 @pointerdown.prevent="pressCustomKey(key)"
                 @click.prevent
