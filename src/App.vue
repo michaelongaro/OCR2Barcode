@@ -711,7 +711,7 @@ onUnmounted(() => {
     <Transition name="custom-keyboard">
       <div
         v-if="keyboardVisible"
-        class="fixed inset-x-0 baseFlex bottom-0 h-[240px] z-50 border-t border-border bg-background/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-2xl backdrop-blur"
+        class="fixed inset-x-0 baseFlex bottom-0 h-[calc(env(safe-area-inset-bottom)+240px)] z-50 border-t border-border bg-background/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-2xl backdrop-blur"
       >
         <div class="mx-auto w-full max-w-xl">
           <div class="flex w-full flex-col gap-2">
