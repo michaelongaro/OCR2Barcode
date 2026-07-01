@@ -401,6 +401,8 @@ async function renderRecentBarcodes() {
 async function generateBarcode() {
   if (!isValidInput.value) return;
 
+  closeCustomKeyboard();
+
   const type = inputType.value;
   const data = rawInputValue.value;
 
