@@ -28,6 +28,133 @@ const barcodes = ref<StoredBarcode[]>([]);
 const pendingLocation = ref<string | null>(null);
 const focusTimers: number[] = [];
 
+type CustomKeyboardMode = "letters" | "numbers";
+
+const isTouchOnly = ref(false);
+const isCustomKeyboardOpen = ref(false);
+const customKeyboardMode = ref<CustomKeyboardMode>("letters");
+
+let touchOnlyMediaQuery: MediaQueryList | null = null;
+
+const shouldUseCustomKeyboard = computed(() => isTouchOnly.value);
+
+const keyboardVisible = computed(() => {
+  return (
+    shouldUseCustomKeyboard.value &&
+    isCustomKeyboardOpen.value &&
+    viewMode.value === "create"
+  );
+});
+
+const dpciKeyboardRows = [
+  ["1", "2", "3"],
+  ["4", "5", "6"],
+  ["7", "8", "9"],
+  ["", "0", "backspace"],
+];
+
+const locationLetterRows = [
+  ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+  ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+  ["numbers", "Z", "X", "C", "V", "B", "N", "M", "backspace"],
+];
+
+const locationNumberRows = [
+  ["1", "2", "3"],
+  ["4", "5", "6"],
+  ["7", "8", "9"],
+  ["letters", "0", "backspace"],
+];
+
+const activeKeyboardRows = computed(() => {
+  if (inputType.value === "dpci") {
+    return dpciKeyboardRows;
+  }
+
+  return customKeyboardMode.value === "letters"
+    ? locationLetterRows
+    : locationNumberRows;
+});
+
+function updateTouchOnlyStatus(event?: MediaQueryListEvent) {
+  isTouchOnly.value = event?.matches ?? touchOnlyMediaQuery?.matches ?? false;
+
+  if (!isTouchOnly.value) {
+    isCustomKeyboardOpen.value = false;
+  }
+}
+
+function openCustomKeyboard() {
+  if (!shouldUseCustomKeyboard.value || viewMode.value !== "create") return;
+
+  isCustomKeyboardOpen.value = true;
+}
+
+function closeCustomKeyboard() {
+  isCustomKeyboardOpen.value = false;
+}
+
+function handleInputPointerDown(event: PointerEvent) {
+  if (!shouldUseCustomKeyboard.value) return;
+
+  event.preventDefault();
+  openCustomKeyboard();
+}
+
+function handleInputClick(event: MouseEvent) {
+  if (!shouldUseCustomKeyboard.value) return;
+
+  event.preventDefault();
+  openCustomKeyboard();
+}
+
+function handleInputFocus(event: FocusEvent) {
+  if (!shouldUseCustomKeyboard.value) return;
+
+  openCustomKeyboard();
+
+  const target = event.target as HTMLInputElement | null;
+  target?.blur();
+}
+
+function getCustomKeyLabel(key: string) {
+  if (key === "backspace") return "⌫";
+  if (key === "enter") return "Enter";
+  if (key === "numbers") return "123";
+  if (key === "letters") return "ABC";
+
+  return key;
+}
+
+async function pressCustomKey(key: string) {
+  if (key === "letters") {
+    customKeyboardMode.value = "letters";
+    return;
+  }
+
+  if (key === "numbers") {
+    customKeyboardMode.value = "numbers";
+    return;
+  }
+
+  if (key === "backspace") {
+    inputValue.value = formatInput(rawInputValue.value.slice(0, -1));
+    return;
+  }
+
+  if (key === "enter") {
+    await generateBarcode();
+    return;
+  }
+
+  const isAllowedKey =
+    inputType.value === "dpci" ? /^\d$/.test(key) : /^[A-Z0-9]$/.test(key);
+
+  if (!isAllowedKey) return;
+
+  inputValue.value = formatInput(`${rawInputValue.value}${key}`);
+}
+
 // Computed values for input
 const rawInputValue = computed(() => {
   return inputValue.value.replace(/[-\s]/g, "").toUpperCase();
@@ -96,7 +223,7 @@ function clearFocusTimers() {
 }
 
 function focusBarcodeInput(delay = 0) {
-  if (viewMode.value !== "create") return;
+  if (viewMode.value !== "create" || shouldUseCustomKeyboard.value) return;
 
   const timer = window.setTimeout(() => {
     inputRef.value?.focus({ preventScroll: true });
@@ -106,7 +233,7 @@ function focusBarcodeInput(delay = 0) {
 }
 
 function reopenBarcodeKeyboard(options: { remount?: boolean } = {}) {
-  if (viewMode.value !== "create") return;
+  if (viewMode.value !== "create" || shouldUseCustomKeyboard.value) return;
 
   clearFocusTimers();
 
@@ -164,6 +291,14 @@ function generateCanvasBarcode(
     height: 75,
     width: 1.5,
   });
+}
+
+function handleMainBackgroundClick(event: MouseEvent) {
+  if (!keyboardVisible.value) return;
+
+  if (event.target !== event.currentTarget) return;
+
+  closeCustomKeyboard();
 }
 
 async function renderNewestBarcode() {
@@ -242,9 +377,9 @@ function handlePageShow() {
   reopenBarcodeKeyboard();
 }
 
-// Clear input when switching input types
 watch(inputType, () => {
   inputValue.value = "";
+  customKeyboardMode.value = "letters";
 
   reopenBarcodeKeyboard({ remount: true });
 });
@@ -255,12 +390,24 @@ watch(viewMode, async (mode) => {
   if (mode === "create") {
     await renderNewestBarcode();
   } else {
+    closeCustomKeyboard();
     await renderRecentBarcodes();
   }
 });
 
 onMounted(async () => {
   loadBarcodes();
+
+  touchOnlyMediaQuery = window.matchMedia(
+    "(hover: none) and (pointer: coarse)",
+  );
+  updateTouchOnlyStatus();
+
+  if (touchOnlyMediaQuery.addEventListener) {
+    touchOnlyMediaQuery.addEventListener("change", updateTouchOnlyStatus);
+  } else {
+    touchOnlyMediaQuery.addListener(updateTouchOnlyStatus);
+  }
 
   document.addEventListener("visibilitychange", handleVisibilityChange);
   window.addEventListener("focus", handleWindowFocus);
@@ -274,6 +421,15 @@ onMounted(async () => {
 
 onUnmounted(() => {
   clearFocusTimers();
+
+  if (touchOnlyMediaQuery) {
+    if (touchOnlyMediaQuery.removeEventListener) {
+      touchOnlyMediaQuery.removeEventListener("change", updateTouchOnlyStatus);
+    } else {
+      touchOnlyMediaQuery.removeListener(updateTouchOnlyStatus);
+    }
+  }
+
   document.removeEventListener("visibilitychange", handleVisibilityChange);
   window.removeEventListener("focus", handleWindowFocus);
   window.removeEventListener("pageshow", handlePageShow);
@@ -283,6 +439,7 @@ onUnmounted(() => {
 <template>
   <div
     class="baseVertFlex h-svh w-full overflow-hidden overscroll-none touch-manipulation bg-background text-foreground"
+    @click.self="handleMainBackgroundClick"
   >
     <!-- Header -->
     <header
@@ -337,8 +494,12 @@ onUnmounted(() => {
     <div
       v-if="viewMode === 'create'"
       class="min-h-0 flex-1 w-full overflow-hidden baseFlex"
+      @click.self="handleMainBackgroundClick"
     >
-      <div class="baseVertFlex gap-6 w-full max-w-sm px-4">
+      <div
+        class="baseVertFlex gap-6 w-full max-w-sm px-4"
+        @click.self="handleMainBackgroundClick"
+      >
         <!-- DPCI / Location Toggle -->
         <div
           :class="`baseFlex gap-2 rounded-lg p-1 ${
@@ -369,8 +530,12 @@ onUnmounted(() => {
               :key="inputKey"
               ref="inputRef"
               :value="inputValue"
+              :readonly="shouldUseCustomKeyboard"
               @input="handleInput"
               @keydown.enter.prevent="generateBarcode"
+              @pointerdown="handleInputPointerDown"
+              @click="handleInputClick"
+              @focus="handleInputFocus"
               :inputmode="inputType === 'dpci' ? 'tel' : 'text'"
               enterkeyhint="done"
               autocomplete="off"
@@ -380,7 +545,11 @@ onUnmounted(() => {
               :placeholder="
                 inputType === 'dpci' ? 'XXX-XX-XXXX' : 'XXX XXX XXX'
               "
-              class="w-full text-center text-2xl tracking-widest p-4 rounded-lg border-2 border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors"
+              :aria-expanded="keyboardVisible"
+              :class="[
+                'w-full text-center text-2xl tracking-widest p-4 rounded-lg border-2 bg-background text-foreground focus:outline-none focus:border-primary transition-colors',
+                keyboardVisible ? 'border-primary ' : 'border-border',
+              ]"
             />
           </div>
 
@@ -423,13 +592,19 @@ onUnmounted(() => {
     </div>
 
     <!-- Recent View -->
-    <div v-else class="min-h-0 flex-1 w-full overflow-hidden px-4 py-1">
+    <div
+      v-else
+      class="min-h-0 flex-1 w-full overflow-hidden px-4 py-1"
+      @click.self="handleMainBackgroundClick"
+    >
       <div
-        class="recent-scroll h-full w-full overflow-y-auto overscroll-contain"
+        class="h-full w-full overflow-y-auto overscroll-contain"
+        @click.self="handleMainBackgroundClick"
       >
         <div
           v-if="barcodes.length"
           class="baseVertFlex gap-4 w-full max-w-sm mx-auto"
+          @click.self="handleMainBackgroundClick"
         >
           <div
             v-for="barcode in barcodes"
@@ -461,5 +636,39 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <Transition name="custom-keyboard">
+      <div
+        v-if="keyboardVisible"
+        class="fixed inset-x-0 baseFlex bottom-0 h-[240px] z-50 border-t border-border bg-background/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-2xl backdrop-blur"
+      >
+        <div class="mx-auto w-full max-w-xl">
+          <div class="flex w-full flex-col gap-2">
+            <div
+              v-for="(row, rowIndex) in activeKeyboardRows"
+              :key="rowIndex"
+              class="flex w-full justify-center gap-1.5"
+            >
+              <button
+                v-for="key in row"
+                :key="key"
+                type="button"
+                :class="[
+                  'h-12 rounded-lg border border-border bg-secondary text-lg font-semibold text-foreground transition active:scale-95 active:bg-primary active:text-primary-foreground',
+                  key === 'enter' ? 'flex-[2] text-base' : 'flex-1',
+                  key === 'numbers' || key === 'letters' || key === 'backspace'
+                    ? 'text-sm'
+                    : '',
+                ]"
+                @pointerdown.prevent="pressCustomKey(key)"
+                @click.prevent
+              >
+                {{ getCustomKeyLabel(key) }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>

@@ -89,3 +89,16 @@
 body {
   min-height: 100svh;
 }
+
+.custom-keyboard-enter-active,
+.custom-keyboard-leave-active {
+  transition:
+    transform 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.custom-keyboard-enter-from,
+.custom-keyboard-leave-to {
+  transform: translateY(100%);
+  opacity: 0;
+}
