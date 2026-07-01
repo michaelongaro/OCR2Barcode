@@ -90,6 +90,10 @@ body {
   min-height: 100svh;
 }
 
+.recent-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
 .custom-keyboard-enter-active,
 .custom-keyboard-leave-active {
   transition:

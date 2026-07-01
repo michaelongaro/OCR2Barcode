@@ -50,20 +50,20 @@ const dpciKeyboardRows = [
   ["1", "2", "3"],
   ["4", "5", "6"],
   ["7", "8", "9"],
-  ["", "0", "backspace"],
+  ["", "0", "⌫"],
 ];
 
 const locationLetterRows = [
   ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
   ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
-  ["numbers", "Z", "X", "C", "V", "B", "N", "M", "backspace"],
+  ["123", "Z", "X", "C", "V", "B", "N", "M", "⌫"],
 ];
 
 const locationNumberRows = [
   ["1", "2", "3"],
   ["4", "5", "6"],
   ["7", "8", "9"],
-  ["letters", "0", "backspace"],
+  ["ABC", "0", "⌫"],
 ];
 
 const activeKeyboardRows = computed(() => {
@@ -75,6 +75,89 @@ const activeKeyboardRows = computed(() => {
     ? locationLetterRows
     : locationNumberRows;
 });
+
+let lockedScrollY = 0;
+let previousHtmlStyles: {
+  height: string;
+  overflow: string;
+  overscrollBehavior: string;
+} | null = null;
+let previousBodyStyles: {
+  height: string;
+  left: string;
+  overflow: string;
+  overscrollBehavior: string;
+  position: string;
+  right: string;
+  top: string;
+  width: string;
+} | null = null;
+
+function lockBodyScroll() {
+  if (previousHtmlStyles || previousBodyStyles) return;
+
+  const html = document.documentElement;
+  const body = document.body;
+
+  lockedScrollY = window.scrollY;
+
+  previousHtmlStyles = {
+    height: html.style.height,
+    overflow: html.style.overflow,
+    overscrollBehavior: html.style.overscrollBehavior,
+  };
+
+  previousBodyStyles = {
+    height: body.style.height,
+    left: body.style.left,
+    overflow: body.style.overflow,
+    overscrollBehavior: body.style.overscrollBehavior,
+    position: body.style.position,
+    right: body.style.right,
+    top: body.style.top,
+    width: body.style.width,
+  };
+
+  html.style.height = "100%";
+  html.style.overflow = "hidden";
+  html.style.overscrollBehavior = "none";
+
+  body.style.position = "fixed";
+  body.style.top = `-${lockedScrollY}px`;
+  body.style.left = "0";
+  body.style.right = "0";
+  body.style.width = "100%";
+  body.style.height = "100%";
+  body.style.overflow = "hidden";
+  body.style.overscrollBehavior = "none";
+}
+
+function unlockBodyScroll() {
+  const html = document.documentElement;
+  const body = document.body;
+
+  if (previousHtmlStyles) {
+    html.style.height = previousHtmlStyles.height;
+    html.style.overflow = previousHtmlStyles.overflow;
+    html.style.overscrollBehavior = previousHtmlStyles.overscrollBehavior;
+  }
+
+  if (previousBodyStyles) {
+    body.style.position = previousBodyStyles.position;
+    body.style.top = previousBodyStyles.top;
+    body.style.left = previousBodyStyles.left;
+    body.style.right = previousBodyStyles.right;
+    body.style.width = previousBodyStyles.width;
+    body.style.height = previousBodyStyles.height;
+    body.style.overflow = previousBodyStyles.overflow;
+    body.style.overscrollBehavior = previousBodyStyles.overscrollBehavior;
+  }
+
+  previousHtmlStyles = null;
+  previousBodyStyles = null;
+
+  window.scrollTo(0, lockedScrollY);
+}
 
 function updateTouchOnlyStatus(event?: MediaQueryListEvent) {
   isTouchOnly.value = event?.matches ?? touchOnlyMediaQuery?.matches ?? false;
@@ -117,33 +200,19 @@ function handleInputFocus(event: FocusEvent) {
   target?.blur();
 }
 
-function getCustomKeyLabel(key: string) {
-  if (key === "backspace") return "⌫";
-  if (key === "enter") return "Enter";
-  if (key === "numbers") return "123";
-  if (key === "letters") return "ABC";
-
-  return key;
-}
-
 async function pressCustomKey(key: string) {
-  if (key === "letters") {
+  if (key === "ABC") {
     customKeyboardMode.value = "letters";
     return;
   }
 
-  if (key === "numbers") {
+  if (key === "123") {
     customKeyboardMode.value = "numbers";
     return;
   }
 
-  if (key === "backspace") {
+  if (key === "⌫") {
     inputValue.value = formatInput(rawInputValue.value.slice(0, -1));
-    return;
-  }
-
-  if (key === "enter") {
-    await generateBarcode();
     return;
   }
 
@@ -396,6 +465,7 @@ watch(viewMode, async (mode) => {
 });
 
 onMounted(async () => {
+  lockBodyScroll();
   loadBarcodes();
 
   touchOnlyMediaQuery = window.matchMedia(
@@ -421,6 +491,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   clearFocusTimers();
+  unlockBodyScroll();
 
   if (touchOnlyMediaQuery) {
     if (touchOnlyMediaQuery.removeEventListener) {
@@ -598,7 +669,7 @@ onUnmounted(() => {
       @click.self="handleMainBackgroundClick"
     >
       <div
-        class="h-full w-full overflow-y-auto overscroll-contain"
+        class="recent-scroll h-full w-full overflow-y-auto overscroll-contain"
         @click.self="handleMainBackgroundClick"
       >
         <div
@@ -654,16 +725,13 @@ onUnmounted(() => {
                 :key="key"
                 type="button"
                 :class="[
-                  'h-12 rounded-lg border border-border bg-secondary text-lg font-semibold text-foreground transition active:scale-95 active:bg-primary active:text-primary-foreground',
-                  key === 'enter' ? 'flex-[2] text-base' : 'flex-1',
-                  key === 'numbers' || key === 'letters' || key === 'backspace'
-                    ? 'text-sm'
-                    : '',
+                  'h-12 rounded-lg border border-border bg-secondary text-lg font-semibold text-foreground transition active:scale-95 active:bg-primary active:text-primary-foreground flex-1',
+                  key === '123' || key === 'ABC' ? 'text-sm' : '',
                 ]"
                 @pointerdown.prevent="pressCustomKey(key)"
                 @click.prevent
               >
-                {{ getCustomKeyLabel(key) }}
+                {{ key }}
               </button>
             </div>
           </div>
